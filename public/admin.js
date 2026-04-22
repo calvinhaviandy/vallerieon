@@ -26,9 +26,11 @@ function formatDate(value) {
 }
 
 function createPreview(item) {
+  const mediaSource = item.url || `/uploads/${item.filename}`;
+
   if (item.type === "video") {
     const video = document.createElement("video");
-    video.src = `/uploads/${item.filename}`;
+    video.src = mediaSource;
     video.controls = true;
     video.preload = "metadata";
     video.playsInline = true;
@@ -36,7 +38,7 @@ function createPreview(item) {
   }
 
   const image = document.createElement("img");
-  image.src = `/uploads/${item.filename}`;
+  image.src = mediaSource;
   image.alt = item.title;
   return image;
 }
