@@ -1,0 +1,20 @@
+[
+  {
+    "id": "e466a68e-4dc0-4d6b-80c3-4fc7e01c3d0e",
+    "type": "image",
+    "title": "Our Little Universe",
+    "description": "Tempat kecil untuk semua tawa, foto random, dan momen yang ingin kita simpan lama-lama.",
+    "filename": "1776863540211-our-first-meet-in-jakarta.jpg",
+    "createdAt": "2026-04-22T13:12:20.213Z",
+    "featured": false
+  },
+  {
+    "id": "ebe2e34a-8e2d-40e7-9833-a66e395f8753",
+    "type": "image",
+    "title": "testing123",
+    "description": "testts",
+    "filename": "1776866579452-testing123.jpg",
+    "createdAt": "2026-04-22T14:02:59.456Z",
+    "featured": false
+  }
+]

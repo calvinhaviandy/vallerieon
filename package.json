@@ -1,0 +1,10 @@
+{
+  "name": "gallery-of-us",
+  "version": "1.0.0",
+  "description": "Cute and modern memory gallery for couples with admin uploads.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT"
+}

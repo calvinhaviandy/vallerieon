@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gallery of Us</title>
+    <meta
+      name="description"
+      content="Galeri kenangan berdua yang lucu, modern, minimalis, dan hangat."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <nav class="topbar">
+          <div class="brand">
+            <span class="brand-dot"></span>
+            <span>Gallery of Us</span>
+          </div>
+        </nav>
+
+        <div class="hero-grid">
+          <section class="hero-copy">
+            <p class="eyebrow">A tiny internet home for two hearts</p>
+            <h1>Semua cerita kecil kita, disimpan di satu tempat yang manis.</h1>
+            <p class="hero-text">
+              Dari foto blur yang lucu sampai video yang penuh suara tawa, semuanya bisa hidup di
+              sini dan nanti bisa dibagikan ke semua orang.
+            </p>
+            <div class="hero-actions">
+              <a class="button button-primary" href="#gallery">Lihat Memori</a>
+              <a class="button button-secondary" href="/admin.html">Of Us</a>
+            </div>
+          </section>
+
+          <aside class="hero-card">
+            <div class="card-sticker sticker-one">cutest archive</div>
+            <div class="card-sticker sticker-two">since forever</div>
+            <div id="featured-memory" class="featured-memory"></div>
+          </aside>
+        </div>
+      </header>
+
+      <main>
+        <section id="gallery" class="gallery-section">
+          <div class="section-heading gallery-head">
+            <div>
+              <p class="eyebrow">Mission heart</p>
+              <h2>Satu hati besar untuk diisi pelan-pelan sampai penuh oleh cerita kalian.</h2>
+            </div>
+            <p class="gallery-summary">
+              Slot kosong akan tetap terlihat sebagai siluet sampai nanti kita mengisinya.
+            </p>
+          </div>
+
+          <div class="love-wall">
+            <div class="love-wall-frame">
+              <div class="love-glow love-glow-left"></div>
+              <div class="love-glow love-glow-right"></div>
+              <div class="heart-progress">
+                <span id="heart-count">0 / 0 memories</span>
+                <span>keep filling our heart</span>
+              </div>
+              <div id="love-canvas" class="love-canvas" aria-live="polite"></div>
+              <aside class="memory-spotlight">
+                <p class="eyebrow">Now glowing</p>
+                <div id="spotlight-card" class="spotlight-card"></div>
+                <p class="spotlight-note">
+                  Hover atau klik salah satu tile untuk melihat memorinya.
+                </p>
+              </aside>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <template id="love-tile-template">
+      <button class="love-tile" type="button">
+        <span class="love-tile-media"></span>
+        <span class="love-tile-overlay">
+          <span class="love-tile-title"></span>
+        </span>
+      </button>
+    </template>
+
+    <template id="spotlight-template">
+      <article class="spotlight-inner">
+        <div class="spotlight-media-shell"></div>
+        <div class="spotlight-copy">
+          <div class="memory-meta">
+            <span class="memory-type"></span>
+            <span class="memory-date"></span>
+          </div>
+          <h3 class="memory-title"></h3>
+          <p class="memory-description"></p>
+        </div>
+      </article>
+    </template>
+
+    <script src="/app.js" defer></script>
+  </body>
+  </html>

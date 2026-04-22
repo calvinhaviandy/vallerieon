@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin | Gallery of Us</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body class="admin-body">
+    <div class="admin-shell">
+      <a class="back-link" href="/index.html">Kembali ke galeri</a>
+
+      <section id="login-card" class="admin-card narrow">
+        <p class="eyebrow">Private access</p>
+        <h1>Masuk ke panel admin</h1>
+        <p class="panel-copy">Gunakan password untuk mengelola upload foto dan video.</p>
+        <form id="login-form" class="stack-form">
+          <label>
+            <span>Password</span>
+            <input id="password" type="password" placeholder="Masukkan password admin" required />
+          </label>
+          <button class="button button-primary" type="submit">Masuk</button>
+          <p id="login-message" class="form-message"></p>
+        </form>
+      </section>
+
+      <section id="admin-panel" class="admin-panel hidden">
+        <div class="admin-card">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Heart settings</p>
+              <h2>Atur jumlah slot heart</h2>
+            </div>
+          </div>
+
+          <form id="settings-form" class="stack-form">
+            <label>
+              <span>Jumlah heart</span>
+              <input
+                id="heart-slots"
+                type="number"
+                min="1"
+                max="120"
+                placeholder="Contoh: 41"
+                required
+              />
+            </label>
+            <button class="button button-secondary" type="submit">Simpan jumlah heart</button>
+            <p id="settings-message" class="form-message"></p>
+          </form>
+        </div>
+
+        <div class="admin-card">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Upload memory</p>
+              <h2>Tambah foto atau video baru</h2>
+            </div>
+            <button id="logout-button" class="button button-secondary" type="button">Logout</button>
+          </div>
+
+          <form id="upload-form" class="stack-form">
+            <input id="editing-id" type="hidden" />
+            <label>
+              <span>Judul memori</span>
+              <input id="title" type="text" placeholder="Contoh: Our first sunset walk" required />
+            </label>
+            <label>
+              <span>Cerita singkat</span>
+              <textarea
+                id="description"
+                rows="4"
+                placeholder="Ceritakan sedikit tentang momen ini..."
+              ></textarea>
+            </label>
+            <label>
+              <span>File foto atau video</span>
+              <input
+                id="file"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml,video/mp4,video/webm,video/quicktime"
+              />
+            </label>
+            <label class="checkbox-row">
+              <input id="featured" type="checkbox" />
+              <span>Jadikan sebagai memori unggulan di halaman depan</span>
+            </label>
+            <div class="form-actions">
+              <button id="submit-memory" class="button button-primary" type="submit">
+                Upload sekarang
+              </button>
+              <button id="cancel-edit" class="button button-secondary hidden" type="button">
+                Batal edit
+              </button>
+            </div>
+            <p id="upload-message" class="form-message"></p>
+          </form>
+        </div>
+
+        <div class="admin-card">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Library</p>
+              <h2>Memori yang sudah tersimpan</h2>
+            </div>
+          </div>
+          <div id="admin-gallery" class="admin-gallery"></div>
+        </div>
+      </section>
+    </div>
+
+    <template id="admin-item-template">
+      <article class="admin-memory-item">
+        <div class="admin-memory-preview"></div>
+        <div class="admin-memory-copy">
+          <h3 class="admin-memory-title"></h3>
+          <p class="admin-memory-description"></p>
+          <p class="admin-memory-meta"></p>
+        </div>
+        <div class="admin-memory-actions">
+          <button class="edit-button" type="button">Edit</button>
+          <button class="delete-button" type="button">Hapus</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="/admin.js" defer></script>
+  </body>
+  </html>
