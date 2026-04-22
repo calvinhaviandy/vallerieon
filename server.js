@@ -6,14 +6,14 @@ const crypto = require("crypto");
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "galleryofus";
+const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || ADMIN_PASSWORD;
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
 const DATA_DIR = path.join(__dirname, "data");
 const GALLERY_FILE = path.join(DATA_DIR, "gallery.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
-
-const sessions = new Map();
 
 ensureStorage();
 
@@ -76,10 +76,58 @@ function parseCookies(req) {
   );
 }
 
+function toBase64Url(value) {
+  return Buffer.from(value)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function fromBase64Url(value) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = "=".repeat((4 - (normalized.length % 4)) % 4);
+  return Buffer.from(`${normalized}${padding}`, "base64").toString("utf8");
+}
+
+function signSession(payload) {
+  return crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("hex");
+}
+
+function createSessionToken() {
+  const payload = toBase64Url(
+    JSON.stringify({
+      exp: Date.now() + 1000 * 60 * 60 * 24 * 14
+    })
+  );
+  const signature = signSession(payload);
+  return `${payload}.${signature}`;
+}
+
+function verifySessionToken(token) {
+  if (!token || !token.includes(".")) {
+    return false;
+  }
+
+  const [payload, signature] = token.split(".");
+  const expected = signSession(payload);
+
+  if (signature !== expected) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(fromBase64Url(payload));
+    return typeof parsed.exp === "number" && parsed.exp > Date.now();
+  } catch {
+    return false;
+  }
+}
+
 function isAuthenticated(req) {
   const cookies = parseCookies(req);
   const token = cookies.session;
-  return Boolean(token && sessions.has(token));
+  return verifySessionToken(token);
 }
 
 function readGallery() {
@@ -190,24 +238,39 @@ async function handleApi(req, res) {
       return;
     }
 
-    const token = crypto.randomBytes(24).toString("hex");
-    sessions.set(token, Date.now());
+    const token = createSessionToken();
+    const cookieParts = [
+      `session=${token}`,
+      "HttpOnly",
+      "Path=/",
+      "SameSite=Lax",
+      "Max-Age=1209600"
+    ];
+    if (IS_PRODUCTION) {
+      cookieParts.push("Secure");
+    }
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": `session=${token}; HttpOnly; Path=/; SameSite=Lax`
+      "Set-Cookie": cookieParts.join("; ")
     });
     res.end(JSON.stringify({ success: true }));
     return;
   }
 
   if (req.method === "POST" && req.url === "/api/admin/logout") {
-    const cookies = parseCookies(req);
-    if (cookies.session) {
-      sessions.delete(cookies.session);
+    const cookieParts = [
+      "session=",
+      "HttpOnly",
+      "Path=/",
+      "SameSite=Lax",
+      "Max-Age=0"
+    ];
+    if (IS_PRODUCTION) {
+      cookieParts.push("Secure");
     }
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": "session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax"
+      "Set-Cookie": cookieParts.join("; ")
     });
     res.end(JSON.stringify({ success: true }));
     return;
