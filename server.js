@@ -62,6 +62,22 @@ function sendText(res, statusCode, text) {
   res.end(text);
 }
 
+function isReadonlyFsError(error) {
+  return ["EROFS", "EPERM", "EACCES", "ENOENT"].includes(error?.code);
+}
+
+function sendStorageError(res, error) {
+  if (isReadonlyFsError(error)) {
+    sendJson(res, 503, {
+      error:
+        "Storage lokal tidak tersedia di deployment ini. Untuk Vercel, upload/edit/hapus media harus memakai storage eksternal."
+    });
+    return;
+  }
+
+  throw error;
+}
+
 function parseCookies(req) {
   const header = req.headers.cookie || "";
   return Object.fromEntries(
@@ -307,7 +323,12 @@ async function handleApi(req, res) {
       ...readSettings(),
       heartSlots
     };
-    writeSettings(nextSettings);
+    try {
+      writeSettings(nextSettings);
+    } catch (error) {
+      sendStorageError(res, error);
+      return;
+    }
     sendJson(res, 200, nextSettings);
     return;
   }
@@ -333,7 +354,12 @@ async function handleApi(req, res) {
     const absolutePath = path.join(UPLOADS_DIR, filename);
     const buffer = Buffer.from(base64Match[2], "base64");
 
-    fs.writeFileSync(absolutePath, buffer);
+    try {
+      fs.writeFileSync(absolutePath, buffer);
+    } catch (error) {
+      sendStorageError(res, error);
+      return;
+    }
 
     const items = readGallery();
     const entry = {
@@ -353,7 +379,12 @@ async function handleApi(req, res) {
     }
 
     items.push(entry);
-    writeGallery(items);
+    try {
+      writeGallery(items);
+    } catch (error) {
+      sendStorageError(res, error);
+      return;
+    }
     sendJson(res, 201, entry);
     return;
   }
@@ -386,7 +417,12 @@ async function handleApi(req, res) {
       });
     }
 
-    writeGallery(items);
+    try {
+      writeGallery(items);
+    } catch (error) {
+      sendStorageError(res, error);
+      return;
+    }
     sendJson(res, 200, target);
     return;
   }
@@ -402,11 +438,21 @@ async function handleApi(req, res) {
     }
 
     const nextItems = items.filter((item) => item.id !== id);
-    writeGallery(nextItems);
+    try {
+      writeGallery(nextItems);
+    } catch (error) {
+      sendStorageError(res, error);
+      return;
+    }
 
     const targetPath = path.join(UPLOADS_DIR, target.filename);
     if (fs.existsSync(targetPath) && !target.filename.startsWith("seed-heart")) {
-      fs.unlinkSync(targetPath);
+      try {
+        fs.unlinkSync(targetPath);
+      } catch (error) {
+        sendStorageError(res, error);
+        return;
+      }
     }
 
     sendJson(res, 200, { success: true });
