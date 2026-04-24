@@ -211,7 +211,7 @@ function isAuthenticated(req) {
 function getGoogleClientOptions() {
   const projectId = process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
   const clientEmail = process.env.GCP_CLIENT_EMAIL;
-  const privateKey = process.env.GCP_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const privateKey = normalizePrivateKey(process.env.GCP_PRIVATE_KEY);
 
   if (clientEmail && privateKey) {
     return {
@@ -224,6 +224,25 @@ function getGoogleClientOptions() {
   }
 
   return projectId ? { projectId } : {};
+}
+
+function normalizePrivateKey(value) {
+  if (!value) {
+    return "";
+  }
+
+  return value
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\\n/g, "\n");
+}
+
+function serializeError(error) {
+  return {
+    name: error?.name || "Error",
+    code: error?.code || error?.status || "",
+    message: error?.message || "Unknown error"
+  };
 }
 
 async function getStorageClient() {
@@ -242,6 +261,41 @@ async function getFirestoreClient() {
     });
   }
   return firestoreClientPromise;
+}
+
+async function runDeepHealthCheck() {
+  const checks = {
+    firestore: { ok: false },
+    storage: { ok: false }
+  };
+
+  if (!USE_GOOGLE_CLOUD) {
+    return checks;
+  }
+
+  try {
+    const db = await getFirestoreClient();
+    await db.collection("settings").doc("app").get();
+    checks.firestore = { ok: true };
+  } catch (error) {
+    checks.firestore = {
+      ok: false,
+      error: serializeError(error)
+    };
+  }
+
+  try {
+    const storage = await getStorageClient();
+    await storage.bucket(process.env.GCS_BUCKET_NAME).exists();
+    checks.storage = { ok: true };
+  } catch (error) {
+    checks.storage = {
+      ok: false,
+      error: serializeError(error)
+    };
+  }
+
+  return checks;
 }
 
 async function readGallery() {
@@ -460,10 +514,12 @@ async function handleApi(req, res) {
   const pathname = requestUrl.pathname;
 
   if (req.method === "GET" && pathname === "/api/health") {
+    const deep = requestUrl.searchParams.get("deep") === "true";
     sendJson(res, 200, {
       ok: true,
       storage: USE_GOOGLE_CLOUD ? "google-cloud" : "local",
-      googleConfig: GOOGLE_CONFIG_STATUS
+      googleConfig: GOOGLE_CONFIG_STATUS,
+      checks: deep ? await runDeepHealthCheck() : undefined
     });
     return;
   }
@@ -676,7 +732,8 @@ async function createRequestHandler(options = {}) {
           ? "Terjadi kesalahan pada server. Pastikan Google Cloud Storage, Firestore, dan permission service account sudah benar."
           : "Terjadi kesalahan pada server.",
         storage: USE_GOOGLE_CLOUD ? "google-cloud" : "local",
-        googleConfig: GOOGLE_CONFIG_STATUS
+        googleConfig: GOOGLE_CONFIG_STATUS,
+        detail: serializeError(error)
       });
     }
   };
