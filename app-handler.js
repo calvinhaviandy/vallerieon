@@ -310,6 +310,8 @@ async function deleteMediaAsset(item) {
 }
 
 async function handleApi(req, res) {
+  const requestUrl = new URL(req.url, "http://localhost");
+
   if (req.method === "GET" && req.url === "/api/gallery") {
     const gallery = (await readGallery()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     sendJson(res, 200, gallery);
@@ -450,8 +452,11 @@ async function handleApi(req, res) {
     return;
   }
 
-  if (req.method === "PUT" && req.url.startsWith("/api/admin/media/")) {
-    const id = req.url.split("/").pop();
+  if (
+    req.method === "PUT" &&
+    (req.url.startsWith("/api/admin/media/") || requestUrl.pathname === "/api/admin/media")
+  ) {
+    const id = requestUrl.searchParams.get("id") || req.url.split("/").pop();
     const body = await parseBody(req).catch(() => null);
     const items = await readGallery();
     const target = items.find((item) => item.id === id);
@@ -483,8 +488,11 @@ async function handleApi(req, res) {
     return;
   }
 
-  if (req.method === "DELETE" && req.url.startsWith("/api/admin/media/")) {
-    const id = req.url.split("/").pop();
+  if (
+    req.method === "DELETE" &&
+    (req.url.startsWith("/api/admin/media/") || requestUrl.pathname === "/api/admin/media")
+  ) {
+    const id = requestUrl.searchParams.get("id") || req.url.split("/").pop();
     const items = await readGallery();
     const target = items.find((item) => item.id === id);
 

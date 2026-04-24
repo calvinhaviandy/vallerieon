@@ -16,5 +16,16 @@
     "filename": "1776866579452-testing123.jpg",
     "createdAt": "2026-04-22T14:02:59.456Z",
     "featured": false
+  },
+  {
+    "id": "d32c2073-83b6-4a3c-9b65-0bd6e343c179",
+    "type": "image",
+    "title": "First meet in Jakardah",
+    "description": "ini cuma test aja",
+    "filename": "1776868621825-first-meet-in-jakardah.jpg",
+    "url": "/uploads/1776868621825-first-meet-in-jakardah.jpg",
+    "storagePath": "1776868621825-first-meet-in-jakardah.jpg",
+    "createdAt": "2026-04-22T14:37:01.827Z",
+    "featured": true
   }
 ]

@@ -122,7 +122,7 @@ async function loadAdminGallery() {
       if (!confirmed) return;
 
       try {
-        await request(`/api/admin/media/${item.id}`, { method: "DELETE" });
+        await request(`/api/admin/media?id=${encodeURIComponent(item.id)}`, { method: "DELETE" });
         await loadAdminGallery();
       } catch (error) {
         uploadMessage.textContent = error.message;
@@ -190,7 +190,7 @@ uploadForm.addEventListener("submit", async (event) => {
 
   try {
     if (editingId) {
-      await request(`/api/admin/media/${editingId}`, {
+      await request(`/api/admin/media?id=${encodeURIComponent(editingId)}`, {
         method: "PUT",
         body: JSON.stringify({
           title: document.getElementById("title").value,
