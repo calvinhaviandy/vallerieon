@@ -80,8 +80,11 @@ Opsional:
 
 ```text
 FRONTEND_ORIGIN=https://domain-vercel-kamu.vercel.app
+FIRESTORE_DATABASE_ID=(default)
 GCS_MAKE_PUBLIC=true
 ```
+
+Kalau `/api/health?deep=true` menampilkan Firestore `5 NOT_FOUND`, buat Firestore database di Google Cloud terlebih dahulu. Jika database ID yang kamu buat bukan `(default)`, isi `FIRESTORE_DATABASE_ID` dengan nama database tersebut.
 
 ### 3. Config frontend
 

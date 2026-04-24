@@ -9,9 +9,14 @@ const GOOGLE_CONFIG_STATUS = {
   bucket: Boolean(process.env.GCS_BUCKET_NAME),
   projectId: Boolean(process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT),
   clientEmail: Boolean(process.env.GCP_CLIENT_EMAIL),
-  privateKey: Boolean(process.env.GCP_PRIVATE_KEY)
+  privateKey: Boolean(process.env.GCP_PRIVATE_KEY),
+  firestoreDatabaseId: process.env.FIRESTORE_DATABASE_ID || "(default)"
 };
-const USE_GOOGLE_CLOUD = Object.values(GOOGLE_CONFIG_STATUS).every(Boolean);
+const USE_GOOGLE_CLOUD =
+  GOOGLE_CONFIG_STATUS.bucket &&
+  GOOGLE_CONFIG_STATUS.projectId &&
+  GOOGLE_CONFIG_STATUS.clientEmail &&
+  GOOGLE_CONFIG_STATUS.privateKey;
 const RAW_FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGIN || process.env.CORS_ORIGIN || "")
   .split(",")
   .map((origin) => origin.trim())
@@ -212,10 +217,15 @@ function getGoogleClientOptions() {
   const projectId = process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
   const clientEmail = process.env.GCP_CLIENT_EMAIL;
   const privateKey = normalizePrivateKey(process.env.GCP_PRIVATE_KEY);
+  const databaseId = process.env.FIRESTORE_DATABASE_ID;
+  const options = {
+    ...(projectId ? { projectId } : {}),
+    ...(databaseId ? { databaseId } : {})
+  };
 
   if (clientEmail && privateKey) {
     return {
-      projectId,
+      ...options,
       credentials: {
         client_email: clientEmail,
         private_key: privateKey
@@ -223,7 +233,7 @@ function getGoogleClientOptions() {
     };
   }
 
-  return projectId ? { projectId } : {};
+  return options;
 }
 
 function normalizePrivateKey(value) {
@@ -238,10 +248,15 @@ function normalizePrivateKey(value) {
 }
 
 function serializeError(error) {
+  const message = error?.message || "Unknown error";
   return {
     name: error?.name || "Error",
     code: error?.code || error?.status || "",
-    message: error?.message || "Unknown error"
+    message,
+    hint:
+      error?.code === 5 || message.includes("NOT_FOUND")
+        ? "Firestore database tidak ditemukan. Buat Firestore database di Google Cloud, atau isi FIRESTORE_DATABASE_ID kalau database ID kamu bukan (default)."
+        : undefined
   };
 }
 
@@ -468,14 +483,15 @@ async function uploadMediaBuffer({ filename, mimeType, buffer }) {
 
     await file.save(buffer, {
       resumable: false,
+      predefinedAcl: process.env.GCS_PREDEFINED_ACL || undefined,
       metadata: {
         contentType: mimeType,
         cacheControl: "public, max-age=31536000, immutable"
       }
     });
 
-    if (process.env.GCS_MAKE_PUBLIC !== "false") {
-      await file.makePublic().catch(() => {});
+    if (process.env.GCS_MAKE_PUBLIC === "true") {
+      await file.makePublic();
     }
 
     return {
