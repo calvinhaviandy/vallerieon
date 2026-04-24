@@ -116,7 +116,7 @@ async function loadAdminGallery() {
     preview.appendChild(createPreview(item));
     title.textContent = item.title;
     description.textContent = item.description || "Tanpa deskripsi";
-    meta.textContent = `${item.type === "video" ? "Video" : "Foto"} • ${formatDate(item.createdAt)}`;
+    meta.textContent = `${item.type === "video" ? "Video" : "Foto"} - ${formatDate(item.createdAt)}`;
 
     editButton.addEventListener("click", () => {
       setEditMode(item);

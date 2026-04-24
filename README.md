@@ -1,92 +1,112 @@
 # Gallery of Us
 
-Website galeri kenangan untuk pasangan, dengan tampilan lucu, modern, minimalis, dan admin panel untuk upload foto atau video.
+Website galeri kenangan untuk pasangan, dengan tampilan lucu, modern, minimalis, admin panel, dan upload foto/video.
 
 ## Fitur
 
 - Halaman publik untuk menampilkan semua memori
 - Hero section dengan memori unggulan
+- Heart mission yang jumlah slotnya bisa diatur dari admin
 - Admin panel login sederhana
-- Upload foto dan video dari browser
-- Hapus memori dari panel admin
-- Penyimpanan file lokal di folder `public/uploads`
+- Upload, edit, dan hapus foto/video dari browser
+- Penyimpanan online dengan Google Cloud Storage dan Firestore saat deploy ke Vercel
+- Fallback penyimpanan lokal untuk development
 
-## Cara menjalankan
+## Cara menjalankan lokal
 
-1. Buka terminal di folder project ini.
-2. Jalankan:
+1. Install dependency:
+
+```bash
+npm install
+```
+
+2. Jalankan server:
 
 ```bash
 npm start
 ```
 
-3. Buka browser ke:
+3. Buka:
 
 ```text
 http://localhost:3000
 ```
 
-## Admin panel
+Admin panel lokal:
 
-- URL admin: `http://localhost:3000/admin.html`
-- Password default: `galleryofus`
+```text
+http://localhost:3000/admin.html
+```
 
-Kalau ingin mengganti password admin, jalankan server dengan environment variable:
+Password default lokal:
 
-```bash
-$env:ADMIN_PASSWORD="password-baru"
-npm start
+```text
+galleryofus
+```
+
+## Deploy Vercel + Google Cloud
+
+Frontend dan API sama-sama jalan di Vercel. Foto/video disimpan di Google Cloud Storage, sementara data galeri dan setting heart disimpan di Firestore.
+
+### 1. Google Cloud
+
+Buat satu project Google Cloud, lalu siapkan:
+
+- Firestore database
+- Cloud Storage bucket
+- Service account dengan akses ke Firestore dan Storage
+- Service account key JSON
+
+Bucket harus bisa dibaca publik supaya gambar/video muncul di website. Cara paling simpel: aktifkan public read untuk object/bucket, atau biarkan app menjalankan `makePublic()` saat upload.
+
+Kalau Firestore masih kosong, app akan memakai data awal dari `data/gallery.json` supaya memori contoh tetap terlihat setelah deploy pertama. Setelah upload/edit dari admin, data akan tersimpan ke Firestore.
+
+### 2. Environment variable Vercel
+
+Isi di Vercel project settings:
+
+```text
+ADMIN_PASSWORD=password-admin-kamu
+ADMIN_SESSION_SECRET=random-secret-yang-panjang
+GCP_PROJECT_ID=id-project-google-cloud
+GCS_BUCKET_NAME=nama-bucket-google-cloud
+GCP_CLIENT_EMAIL=client_email_dari_service_account
+GCP_PRIVATE_KEY=private_key_dari_service_account
+```
+
+Catatan untuk `GCP_PRIVATE_KEY`: kalau Vercel menyimpan newline sebagai teks `\n`, app sudah otomatis mengubahnya menjadi newline asli.
+
+Opsional:
+
+```text
+FRONTEND_ORIGIN=https://domain-vercel-kamu.vercel.app
+GCS_MAKE_PUBLIC=true
+```
+
+### 3. Config frontend
+
+Untuk Vercel full app, `public/config.js` cukup seperti ini:
+
+```js
+window.GALLERY_API_BASE = "";
+```
+
+Artinya frontend akan memanggil API dari domain Vercel yang sama, misalnya:
+
+```text
+https://domain-kamu.vercel.app/api/gallery
 ```
 
 ## Struktur utama
 
-- `server.js` server HTTP ringan tanpa dependency tambahan
+- `server.js` server lokal
+- `app-handler.js` handler API bersama untuk lokal dan Vercel
+- `api/index.js` entrypoint Vercel serverless API
 - `public/index.html` halaman publik
 - `public/admin.html` panel admin
 - `public/styles.css` styling utama
 - `public/app.js` logika galeri publik
 - `public/admin.js` logika admin
-- `data/gallery.json` metadata semua memori
-- `public/uploads/` file foto dan video yang diunggah
-
-## Catatan publish
-
-Versi ini bisa dipakai dengan frontend di Vercel dan backend di Railway.
-
-### Backend Railway
-
-Deploy repo ini ke Railway sebagai Node app. Railway akan menjalankan:
-
-```bash
-npm start
-```
-
-Environment variable yang perlu disiapkan di Railway:
-
-```text
-ADMIN_PASSWORD=password-admin-kamu
-ADMIN_SESSION_SECRET=random-secret-yang-panjang
-FRONTEND_ORIGIN=https://domain-vercel-kamu.vercel.app
-PUBLIC_API_URL=https://domain-railway-kamu.up.railway.app
-```
-
-Untuk upload yang lebih awet, tambahkan juga `BLOB_READ_WRITE_TOKEN` dari Vercel Blob. Kalau tidak memakai Blob, file upload disimpan di filesystem Railway dan sebaiknya dipasangkan dengan persistent volume.
-
-### Frontend Vercel
-
-Deploy sebagai static frontend. File frontend ada di folder `public`.
-
-Set URL backend Railway di `public/config.js`:
-
-```js
-window.GALLERY_API_BASE = "https://domain-railway-kamu.up.railway.app";
-```
-
-Setelah itu deploy ke Vercel. Frontend akan memanggil API Railway dan tetap bisa memakai cookie login admin lintas domain.
-
-Kalau nanti ingin benar-benar dipakai banyak orang secara online dengan keamanan yang lebih kuat, langkah berikutnya yang bagus adalah:
-
-- pindahkan login admin ke sistem auth yang lebih aman
-- simpan file ke cloud storage
-- pakai database untuk metadata galeri
-- tambahkan domain publik dan HTTPS
+- `data/gallery.json` metadata lokal
+- `data/settings.json` setting lokal
+- `public/uploads/` upload lokal

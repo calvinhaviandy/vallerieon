@@ -5,12 +5,24 @@ const crypto = require("crypto");
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "galleryofus";
 const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || ADMIN_PASSWORD;
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
-const USE_BLOB_STORAGE = Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL);
-const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGIN || process.env.CORS_ORIGIN || "")
+const USE_GOOGLE_CLOUD = Boolean(process.env.GCS_BUCKET_NAME);
+const RAW_FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGIN || process.env.CORS_ORIGIN || "")
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
-const COOKIE_SAMESITE = process.env.COOKIE_SAMESITE || (IS_PRODUCTION ? "None" : "Lax");
+const FRONTEND_ORIGINS = RAW_FRONTEND_ORIGINS.flatMap((origin) => {
+  if (origin === "*") {
+    return [origin];
+  }
+
+  const normalized = origin.replace(/\/$/, "");
+  if (normalized.startsWith("http://") || normalized.startsWith("https://")) {
+    return [normalized];
+  }
+
+  return [`https://${normalized}`, `http://${normalized}`];
+});
+const COOKIE_SAMESITE = process.env.COOKIE_SAMESITE || "Lax";
 const COOKIE_SECURE = IS_PRODUCTION || COOKIE_SAMESITE.toLowerCase() === "none";
 
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -18,10 +30,10 @@ const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
 const DATA_DIR = path.join(__dirname, "data");
 const GALLERY_FILE = path.join(DATA_DIR, "gallery.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
-const GALLERY_BLOB_PATH = "config/gallery.json";
-const SETTINGS_BLOB_PATH = "config/settings.json";
+const DEFAULT_SETTINGS = { heartSlots: 41 };
 
-let blobSdkPromise;
+let storageClientPromise;
+let firestoreClientPromise;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -39,10 +51,10 @@ const mimeTypes = {
   ".ico": "image/x-icon"
 };
 
-ensureStorage();
+ensureLocalStorage();
 
-function ensureStorage() {
-  if (USE_BLOB_STORAGE) {
+function ensureLocalStorage() {
+  if (USE_GOOGLE_CLOUD) {
     return;
   }
 
@@ -54,12 +66,16 @@ function ensureStorage() {
   }
 
   if (!fs.existsSync(SETTINGS_FILE)) {
-    fs.writeFileSync(
-      SETTINGS_FILE,
-      JSON.stringify({ heartSlots: 41 }, null, 2),
-      "utf8"
-    );
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(DEFAULT_SETTINGS, null, 2), "utf8");
   }
+}
+
+function readLocalGallery() {
+  return JSON.parse(fs.readFileSync(GALLERY_FILE, "utf8"));
+}
+
+function readLocalSettings() {
+  return JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
 }
 
 function sendJson(res, statusCode, payload) {
@@ -77,7 +93,7 @@ function sendText(res, statusCode, text) {
 }
 
 function getAllowedOrigin(req) {
-  const origin = req.headers.origin;
+  const origin = req.headers.origin?.replace(/\/$/, "");
   if (!origin) {
     return "";
   }
@@ -186,66 +202,108 @@ function isAuthenticated(req) {
   return verifySessionToken(cookies.session);
 }
 
-async function getBlobSdk() {
-  if (!blobSdkPromise) {
-    blobSdkPromise = import("@vercel/blob");
+function getGoogleClientOptions() {
+  const projectId = process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT;
+  const clientEmail = process.env.GCP_CLIENT_EMAIL;
+  const privateKey = process.env.GCP_PRIVATE_KEY?.replace(/\\n/g, "\n");
+
+  if (clientEmail && privateKey) {
+    return {
+      projectId,
+      credentials: {
+        client_email: clientEmail,
+        private_key: privateKey
+      }
+    };
   }
-  return blobSdkPromise;
+
+  return projectId ? { projectId } : {};
 }
 
-async function readJsonBlob(pathname, fallback) {
-  const { list } = await getBlobSdk();
-  const { blobs } = await list({ prefix: pathname, limit: 1 });
-  const blob = blobs.find((item) => item.pathname === pathname) || blobs[0];
-
-  if (!blob?.url) {
-    return fallback;
+async function getStorageClient() {
+  if (!storageClientPromise) {
+    storageClientPromise = import("@google-cloud/storage").then(({ Storage }) => {
+      return new Storage(getGoogleClientOptions());
+    });
   }
-
-  const response = await fetch(blob.url, { cache: "no-store" });
-  if (!response.ok) {
-    return fallback;
-  }
-
-  return response.json();
+  return storageClientPromise;
 }
 
-async function writeJsonBlob(pathname, payload) {
-  const { put } = await getBlobSdk();
-  await put(pathname, JSON.stringify(payload, null, 2), {
-    access: "public",
-    allowOverwrite: true,
-    contentType: "application/json"
-  });
+async function getFirestoreClient() {
+  if (!firestoreClientPromise) {
+    firestoreClientPromise = import("@google-cloud/firestore").then(({ Firestore }) => {
+      return new Firestore(getGoogleClientOptions());
+    });
+  }
+  return firestoreClientPromise;
 }
 
 async function readGallery() {
-  if (USE_BLOB_STORAGE) {
-    return readJsonBlob(GALLERY_BLOB_PATH, []);
+  if (USE_GOOGLE_CLOUD) {
+    const db = await getFirestoreClient();
+    const snapshot = await db.collection("gallery").orderBy("createdAt", "desc").get();
+    if (snapshot.empty && process.env.DISABLE_LOCAL_SEED !== "true" && fs.existsSync(GALLERY_FILE)) {
+      return readLocalGallery();
+    }
+
+    return snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data()
+    }));
   }
-  return JSON.parse(fs.readFileSync(GALLERY_FILE, "utf8"));
+
+  return readLocalGallery();
 }
 
 async function writeGallery(items) {
-  if (USE_BLOB_STORAGE) {
-    await writeJsonBlob(GALLERY_BLOB_PATH, items);
+  if (USE_GOOGLE_CLOUD) {
+    const db = await getFirestoreClient();
+    const collection = db.collection("gallery");
+    const existing = await collection.get();
+    const batch = db.batch();
+
+    existing.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+
+    items.forEach((item) => {
+      const { id, ...data } = item;
+      batch.set(collection.doc(id), data);
+    });
+
+    await batch.commit();
     return;
   }
+
   fs.writeFileSync(GALLERY_FILE, JSON.stringify(items, null, 2), "utf8");
 }
 
 async function readSettings() {
-  if (USE_BLOB_STORAGE) {
-    return readJsonBlob(SETTINGS_BLOB_PATH, { heartSlots: 41 });
+  if (USE_GOOGLE_CLOUD) {
+    const db = await getFirestoreClient();
+    const snapshot = await db.collection("settings").doc("app").get();
+    const localSettings =
+      process.env.DISABLE_LOCAL_SEED !== "true" && fs.existsSync(SETTINGS_FILE)
+        ? readLocalSettings()
+        : {};
+
+    return {
+      ...DEFAULT_SETTINGS,
+      ...localSettings,
+      ...(snapshot.exists ? snapshot.data() : {})
+    };
   }
-  return JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
+
+  return readLocalSettings();
 }
 
 async function writeSettings(settings) {
-  if (USE_BLOB_STORAGE) {
-    await writeJsonBlob(SETTINGS_BLOB_PATH, settings);
+  if (USE_GOOGLE_CLOUD) {
+    const db = await getFirestoreClient();
+    await db.collection("settings").doc("app").set(settings, { merge: true });
     return;
   }
+
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), "utf8");
 }
 
@@ -296,7 +354,7 @@ function getExtensionFromMime(mimeType) {
 }
 
 function getPublicBaseUrl(req) {
-  const configuredUrl = process.env.PUBLIC_API_URL || process.env.RAILWAY_PUBLIC_DOMAIN;
+  const configuredUrl = process.env.PUBLIC_API_URL;
   if (configuredUrl) {
     const normalized = configuredUrl.startsWith("http")
       ? configuredUrl
@@ -307,6 +365,12 @@ function getPublicBaseUrl(req) {
   const protocol = req.headers["x-forwarded-proto"] || "http";
   const host = req.headers["x-forwarded-host"] || req.headers.host;
   return `${protocol}://${host}`;
+}
+
+function getPublicStorageUrl(storagePath) {
+  const bucketName = process.env.GCS_BUCKET_NAME;
+  const encodedPath = storagePath.split("/").map(encodeURIComponent).join("/");
+  return `https://storage.googleapis.com/${bucketName}/${encodedPath}`;
 }
 
 function serveStatic(req, res) {
@@ -337,18 +401,26 @@ function serveStatic(req, res) {
 }
 
 async function uploadMediaBuffer({ filename, mimeType, buffer }) {
-  if (USE_BLOB_STORAGE) {
-    const { put } = await getBlobSdk();
+  if (USE_GOOGLE_CLOUD) {
+    const storage = await getStorageClient();
     const storagePath = `uploads/${filename}`;
-    const blob = await put(storagePath, buffer, {
-      access: "public",
-      addRandomSuffix: false,
-      contentType: mimeType
+    const file = storage.bucket(process.env.GCS_BUCKET_NAME).file(storagePath);
+
+    await file.save(buffer, {
+      resumable: false,
+      metadata: {
+        contentType: mimeType,
+        cacheControl: "public, max-age=31536000, immutable"
+      }
     });
 
+    if (process.env.GCS_MAKE_PUBLIC !== "false") {
+      await file.makePublic().catch(() => {});
+    }
+
     return {
-      url: blob.url,
-      storagePath: blob.pathname || storagePath
+      url: getPublicStorageUrl(storagePath),
+      storagePath
     };
   }
 
@@ -361,10 +433,12 @@ async function uploadMediaBuffer({ filename, mimeType, buffer }) {
 }
 
 async function deleteMediaAsset(item) {
-  if (USE_BLOB_STORAGE) {
-    if (item.url || item.storagePath) {
-      const { del } = await getBlobSdk();
-      await del(item.url || item.storagePath);
+  if (USE_GOOGLE_CLOUD) {
+    if (item.storagePath) {
+      const storage = await getStorageClient();
+      await storage.bucket(process.env.GCS_BUCKET_NAME).file(item.storagePath).delete({
+        ignoreNotFound: true
+      });
     }
     return;
   }
@@ -377,19 +451,20 @@ async function deleteMediaAsset(item) {
 
 async function handleApi(req, res) {
   const requestUrl = new URL(req.url, "http://localhost");
+  const pathname = requestUrl.pathname;
 
-  if (req.method === "GET" && req.url === "/api/gallery") {
+  if (req.method === "GET" && pathname === "/api/gallery") {
     const gallery = (await readGallery()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     sendJson(res, 200, gallery);
     return;
   }
 
-  if (req.method === "GET" && req.url === "/api/site-config") {
+  if (req.method === "GET" && pathname === "/api/site-config") {
     sendJson(res, 200, await readSettings());
     return;
   }
 
-  if (req.method === "POST" && req.url === "/api/admin/login") {
+  if (req.method === "POST" && pathname === "/api/admin/login") {
     const body = await parseBody(req).catch(() => null);
     if (!body || body.password !== ADMIN_PASSWORD) {
       sendJson(res, 401, { error: "Password salah." });
@@ -407,7 +482,7 @@ async function handleApi(req, res) {
     return;
   }
 
-  if (req.method === "POST" && req.url === "/api/admin/logout") {
+  if (req.method === "POST" && pathname === "/api/admin/logout") {
     const cookieParts = getSessionCookieParts("", 0);
 
     res.writeHead(200, {
@@ -418,7 +493,7 @@ async function handleApi(req, res) {
     return;
   }
 
-  if (req.method === "GET" && req.url === "/api/admin/session") {
+  if (req.method === "GET" && pathname === "/api/admin/session") {
     sendJson(res, 200, { authenticated: isAuthenticated(req) });
     return;
   }
@@ -428,7 +503,7 @@ async function handleApi(req, res) {
     return;
   }
 
-  if (req.method === "PUT" && req.url === "/api/admin/settings") {
+  if (req.method === "PUT" && pathname === "/api/admin/settings") {
     const body = await parseBody(req).catch(() => null);
     const heartSlots = Number(body?.heartSlots);
     const galleryCount = (await readGallery()).length;
@@ -454,7 +529,7 @@ async function handleApi(req, res) {
     return;
   }
 
-  if (req.method === "POST" && req.url === "/api/admin/upload") {
+  if (req.method === "POST" && pathname === "/api/admin/upload") {
     const body = await parseBody(req).catch(() => null);
     if (!body || !body.fileData || !body.mimeType) {
       sendJson(res, 400, { error: "Data upload tidak lengkap." });
@@ -503,11 +578,8 @@ async function handleApi(req, res) {
     return;
   }
 
-  if (
-    req.method === "PUT" &&
-    (req.url.startsWith("/api/admin/media/") || requestUrl.pathname === "/api/admin/media")
-  ) {
-    const id = requestUrl.searchParams.get("id") || req.url.split("/").pop();
+  if (req.method === "PUT" && (pathname.startsWith("/api/admin/media/") || pathname === "/api/admin/media")) {
+    const id = requestUrl.searchParams.get("id") || pathname.split("/").pop();
     const body = await parseBody(req).catch(() => null);
     const items = await readGallery();
     const target = items.find((item) => item.id === id);
@@ -539,11 +611,8 @@ async function handleApi(req, res) {
     return;
   }
 
-  if (
-    req.method === "DELETE" &&
-    (req.url.startsWith("/api/admin/media/") || requestUrl.pathname === "/api/admin/media")
-  ) {
-    const id = requestUrl.searchParams.get("id") || req.url.split("/").pop();
+  if (req.method === "DELETE" && (pathname.startsWith("/api/admin/media/") || pathname === "/api/admin/media")) {
+    const id = requestUrl.searchParams.get("id") || pathname.split("/").pop();
     const items = await readGallery();
     const target = items.find((item) => item.id === id);
 
@@ -588,8 +657,8 @@ async function createRequestHandler(options = {}) {
     } catch (error) {
       console.error(error);
       sendJson(res, 500, {
-        error: USE_BLOB_STORAGE
-          ? "Terjadi kesalahan pada server. Pastikan Blob store Vercel dan env `BLOB_READ_WRITE_TOKEN` sudah aktif."
+        error: USE_GOOGLE_CLOUD
+          ? "Terjadi kesalahan pada server. Pastikan Google Cloud Storage, Firestore, dan environment variable Vercel sudah benar."
           : "Terjadi kesalahan pada server."
       });
     }
