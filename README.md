@@ -51,7 +51,40 @@ npm start
 
 ## Catatan publish
 
-Versi ini sudah cocok untuk dijalankan lokal atau dideploy ke VPS/server Node sederhana. Kalau nanti ingin benar-benar dipakai banyak orang secara online dengan keamanan yang lebih kuat, langkah berikutnya yang bagus adalah:
+Versi ini bisa dipakai dengan frontend di Vercel dan backend di Railway.
+
+### Backend Railway
+
+Deploy repo ini ke Railway sebagai Node app. Railway akan menjalankan:
+
+```bash
+npm start
+```
+
+Environment variable yang perlu disiapkan di Railway:
+
+```text
+ADMIN_PASSWORD=password-admin-kamu
+ADMIN_SESSION_SECRET=random-secret-yang-panjang
+FRONTEND_ORIGIN=https://domain-vercel-kamu.vercel.app
+PUBLIC_API_URL=https://domain-railway-kamu.up.railway.app
+```
+
+Untuk upload yang lebih awet, tambahkan juga `BLOB_READ_WRITE_TOKEN` dari Vercel Blob. Kalau tidak memakai Blob, file upload disimpan di filesystem Railway dan sebaiknya dipasangkan dengan persistent volume.
+
+### Frontend Vercel
+
+Deploy sebagai static frontend. File frontend ada di folder `public`.
+
+Set URL backend Railway di `public/config.js`:
+
+```js
+window.GALLERY_API_BASE = "https://domain-railway-kamu.up.railway.app";
+```
+
+Setelah itu deploy ke Vercel. Frontend akan memanggil API Railway dan tetap bisa memakai cookie login admin lintas domain.
+
+Kalau nanti ingin benar-benar dipakai banyak orang secara online dengan keamanan yang lebih kuat, langkah berikutnya yang bagus adalah:
 
 - pindahkan login admin ke sistem auth yang lebih aman
 - simpan file ke cloud storage

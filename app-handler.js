@@ -6,6 +6,12 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "galleryofus";
 const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || ADMIN_PASSWORD;
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const USE_BLOB_STORAGE = Boolean(process.env.BLOB_READ_WRITE_TOKEN || process.env.VERCEL);
+const FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGIN || process.env.CORS_ORIGIN || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const COOKIE_SAMESITE = process.env.COOKIE_SAMESITE || (IS_PRODUCTION ? "None" : "Lax");
+const COOKIE_SECURE = IS_PRODUCTION || COOKIE_SAMESITE.toLowerCase() === "none";
 
 const PUBLIC_DIR = path.join(__dirname, "public");
 const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
@@ -68,6 +74,52 @@ function sendText(res, statusCode, text) {
     "Content-Type": "text/plain; charset=utf-8"
   });
   res.end(text);
+}
+
+function getAllowedOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) {
+    return "";
+  }
+
+  if (FRONTEND_ORIGINS.includes("*") || FRONTEND_ORIGINS.includes(origin)) {
+    return origin;
+  }
+
+  if (!IS_PRODUCTION && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+    return origin;
+  }
+
+  return "";
+}
+
+function applyCors(req, res) {
+  const allowedOrigin = getAllowedOrigin(req);
+  if (!allowedOrigin) {
+    return;
+  }
+
+  res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Vary", "Origin");
+}
+
+function getSessionCookieParts(value, maxAge) {
+  const cookieParts = [
+    `session=${value}`,
+    "HttpOnly",
+    "Path=/",
+    `SameSite=${COOKIE_SAMESITE}`,
+    `Max-Age=${maxAge}`
+  ];
+
+  if (COOKIE_SECURE) {
+    cookieParts.push("Secure");
+  }
+
+  return cookieParts;
 }
 
 function parseCookies(req) {
@@ -243,6 +295,20 @@ function getExtensionFromMime(mimeType) {
   return lookup[mimeType] || "";
 }
 
+function getPublicBaseUrl(req) {
+  const configuredUrl = process.env.PUBLIC_API_URL || process.env.RAILWAY_PUBLIC_DOMAIN;
+  if (configuredUrl) {
+    const normalized = configuredUrl.startsWith("http")
+      ? configuredUrl
+      : `https://${configuredUrl}`;
+    return normalized.replace(/\/$/, "");
+  }
+
+  const protocol = req.headers["x-forwarded-proto"] || "http";
+  const host = req.headers["x-forwarded-host"] || req.headers.host;
+  return `${protocol}://${host}`;
+}
+
 function serveStatic(req, res) {
   const requestPath = req.url === "/" ? "/index.html" : decodeURIComponent(req.url.split("?")[0]);
   const safePath = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
@@ -331,16 +397,7 @@ async function handleApi(req, res) {
     }
 
     const token = createSessionToken();
-    const cookieParts = [
-      `session=${token}`,
-      "HttpOnly",
-      "Path=/",
-      "SameSite=Lax",
-      "Max-Age=1209600"
-    ];
-    if (IS_PRODUCTION) {
-      cookieParts.push("Secure");
-    }
+    const cookieParts = getSessionCookieParts(token, 1209600);
 
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
@@ -351,16 +408,7 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "POST" && req.url === "/api/admin/logout") {
-    const cookieParts = [
-      "session=",
-      "HttpOnly",
-      "Path=/",
-      "SameSite=Lax",
-      "Max-Age=0"
-    ];
-    if (IS_PRODUCTION) {
-      cookieParts.push("Secure");
-    }
+    const cookieParts = getSessionCookieParts("", 0);
 
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
@@ -426,6 +474,9 @@ async function handleApi(req, res) {
     const filename = `${Date.now()}-${slug}${ext}`;
     const buffer = Buffer.from(base64Match[2], "base64");
     const uploaded = await uploadMediaBuffer({ filename, mimeType, buffer });
+    const mediaUrl = uploaded.url.startsWith("http")
+      ? uploaded.url
+      : `${getPublicBaseUrl(req)}${uploaded.url}`;
     const items = await readGallery();
 
     const entry = {
@@ -434,7 +485,7 @@ async function handleApi(req, res) {
       title: body.title || "Untitled Memory",
       description: body.description || "",
       filename,
-      url: uploaded.url,
+      url: mediaUrl,
       storagePath: uploaded.storagePath,
       createdAt: new Date().toISOString(),
       featured: Boolean(body.featured)
@@ -517,6 +568,13 @@ async function createRequestHandler(options = {}) {
   return async function requestHandler(req, res) {
     try {
       if (req.url.startsWith("/api/")) {
+        applyCors(req, res);
+        if (req.method === "OPTIONS") {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+
         await handleApi(req, res);
         return;
       }

@@ -4,6 +4,11 @@ const spotlightCard = document.getElementById("spotlight-card");
 const heartCount = document.getElementById("heart-count");
 const tileTemplate = document.getElementById("love-tile-template");
 const spotlightTemplate = document.getElementById("spotlight-template");
+const API_BASE = (window.GALLERY_API_BASE || "").replace(/\/$/, "");
+
+function apiUrl(path) {
+  return `${API_BASE}${path}`;
+}
 
 function generateHeartPositions(total) {
   const heartRows = [
@@ -225,8 +230,8 @@ function renderHeartWall(items, heartSlots) {
 async function loadGallery() {
   loveCanvas.innerHTML = "<p>Memuat kenangan...</p>";
   const [galleryResponse, configResponse] = await Promise.all([
-    fetch("/api/gallery"),
-    fetch("/api/site-config")
+    fetch(apiUrl("/api/gallery"), { credentials: "include" }),
+    fetch(apiUrl("/api/site-config"), { credentials: "include" })
   ]);
   const items = await galleryResponse.json();
   const config = await configResponse.json();

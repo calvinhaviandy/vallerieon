@@ -2,7 +2,7 @@ const http = require("http");
 const { createRequestHandler } = require("./app-handler");
 
 const PORT = process.env.PORT || 3000;
-const HOST = process.env.HOST || "0.0.0.0";
+const HOST = process.env.HOST || "localhost";
 
 (async () => {
   const handler = await createRequestHandler({ serveStaticFiles: true });

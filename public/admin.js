@@ -14,6 +14,11 @@ const submitMemoryButton = document.getElementById("submit-memory");
 const cancelEditButton = document.getElementById("cancel-edit");
 const fileInput = document.getElementById("file");
 const heartSlotsInput = document.getElementById("heart-slots");
+const API_BASE = (window.GALLERY_API_BASE || "").replace(/\/$/, "");
+
+function apiUrl(path) {
+  return `${API_BASE}${path}`;
+}
 
 function formatDate(value) {
   return new Date(value).toLocaleString("id-ID", {
@@ -44,11 +49,11 @@ function createPreview(item) {
 }
 
 async function request(url, options = {}) {
-  const response = await fetch(url, {
+  const response = await fetch(apiUrl(url), {
     headers: {
       "Content-Type": "application/json"
     },
-    credentials: "same-origin",
+    credentials: "include",
     ...options
   });
 
