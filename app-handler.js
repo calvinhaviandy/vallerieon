@@ -5,7 +5,13 @@ const crypto = require("crypto");
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "galleryofus";
 const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || ADMIN_PASSWORD;
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
-const USE_GOOGLE_CLOUD = Boolean(process.env.GCS_BUCKET_NAME);
+const GOOGLE_CONFIG_STATUS = {
+  bucket: Boolean(process.env.GCS_BUCKET_NAME),
+  projectId: Boolean(process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT),
+  clientEmail: Boolean(process.env.GCP_CLIENT_EMAIL),
+  privateKey: Boolean(process.env.GCP_PRIVATE_KEY)
+};
+const USE_GOOGLE_CLOUD = Object.values(GOOGLE_CONFIG_STATUS).every(Boolean);
 const RAW_FRONTEND_ORIGINS = (process.env.FRONTEND_ORIGIN || process.env.CORS_ORIGIN || "")
   .split(",")
   .map((origin) => origin.trim())
@@ -453,6 +459,15 @@ async function handleApi(req, res) {
   const requestUrl = new URL(req.url, "http://localhost");
   const pathname = requestUrl.pathname;
 
+  if (req.method === "GET" && pathname === "/api/health") {
+    sendJson(res, 200, {
+      ok: true,
+      storage: USE_GOOGLE_CLOUD ? "google-cloud" : "local",
+      googleConfig: GOOGLE_CONFIG_STATUS
+    });
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/api/gallery") {
     const gallery = (await readGallery()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     sendJson(res, 200, gallery);
@@ -658,8 +673,10 @@ async function createRequestHandler(options = {}) {
       console.error(error);
       sendJson(res, 500, {
         error: USE_GOOGLE_CLOUD
-          ? "Terjadi kesalahan pada server. Pastikan Google Cloud Storage, Firestore, dan environment variable Vercel sudah benar."
-          : "Terjadi kesalahan pada server."
+          ? "Terjadi kesalahan pada server. Pastikan Google Cloud Storage, Firestore, dan permission service account sudah benar."
+          : "Terjadi kesalahan pada server.",
+        storage: USE_GOOGLE_CLOUD ? "google-cloud" : "local",
+        googleConfig: GOOGLE_CONFIG_STATUS
       });
     }
   };
