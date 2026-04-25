@@ -41,7 +41,7 @@ const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
 const DATA_DIR = path.join(__dirname, "data");
 const GALLERY_FILE = path.join(DATA_DIR, "gallery.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
-const DEFAULT_SETTINGS = { heartSlots: 41 };
+const DEFAULT_SETTINGS = { heartSlots: 41, anniversaryDate: "" };
 
 let storageClientPromise;
 let firestoreClientPromise;
@@ -509,6 +509,17 @@ async function uploadMediaBuffer({ filename, mimeType, buffer }) {
 }
 
 async function deleteMediaAsset(item) {
+  const mediaItems = getEntryMedia(item);
+
+  if (mediaItems.length > 1) {
+    await Promise.all(mediaItems.map((media) => deleteSingleMediaAsset(media)));
+    return;
+  }
+
+  await deleteSingleMediaAsset(item);
+}
+
+async function deleteSingleMediaAsset(item) {
   if (USE_GOOGLE_CLOUD) {
     if (item.storagePath) {
       const storage = await getStorageClient();
@@ -523,6 +534,39 @@ async function deleteMediaAsset(item) {
   if (fs.existsSync(targetPath) && !item.filename.startsWith("seed-heart")) {
     fs.unlinkSync(targetPath);
   }
+}
+
+function getEntryMedia(item) {
+  if (Array.isArray(item.media) && item.media.length) {
+    return item.media;
+  }
+
+  return [
+    {
+      type: item.type,
+      filename: item.filename,
+      url: item.url,
+      storagePath: item.storagePath
+    }
+  ].filter((media) => media.url || media.filename || media.storagePath);
+}
+
+function parseUploadFiles(body) {
+  if (Array.isArray(body.files) && body.files.length) {
+    return body.files;
+  }
+
+  if (body.fileData && body.mimeType) {
+    return [
+      {
+        originalName: body.originalName,
+        mimeType: body.mimeType,
+        fileData: body.fileData
+      }
+    ];
+  }
+
+  return [];
 }
 
 async function handleApi(req, res) {
@@ -593,6 +637,7 @@ async function handleApi(req, res) {
   if (req.method === "PUT" && pathname === "/api/admin/settings") {
     const body = await parseBody(req).catch(() => null);
     const heartSlots = Number(body?.heartSlots);
+    const anniversaryDate = body?.anniversaryDate || "";
     const galleryCount = (await readGallery()).length;
 
     if (!Number.isInteger(heartSlots) || heartSlots < 1 || heartSlots > 120) {
@@ -607,9 +652,15 @@ async function handleApi(req, res) {
       return;
     }
 
+    if (anniversaryDate && !/^\d{4}-\d{2}-\d{2}$/.test(anniversaryDate)) {
+      sendJson(res, 400, { error: "Format tanggal anniversary tidak valid." });
+      return;
+    }
+
     const nextSettings = {
       ...(await readSettings()),
-      heartSlots
+      heartSlots,
+      anniversaryDate
     };
     await writeSettings(nextSettings);
     sendJson(res, 200, nextSettings);
@@ -618,37 +669,50 @@ async function handleApi(req, res) {
 
   if (req.method === "POST" && pathname === "/api/admin/upload") {
     const body = await parseBody(req).catch(() => null);
-    if (!body || !body.fileData || !body.mimeType) {
+    const uploadFiles = body ? parseUploadFiles(body) : [];
+    if (!body || !uploadFiles.length) {
       sendJson(res, 400, { error: "Data upload tidak lengkap." });
       return;
     }
 
-    const base64Match = body.fileData.match(/^data:(.+);base64,(.+)$/);
-    if (!base64Match) {
-      sendJson(res, 400, { error: "Format file tidak valid." });
-      return;
-    }
+    const uploadedMedia = await Promise.all(
+      uploadFiles.map(async (file, index) => {
+        const base64Match = file.fileData?.match(/^data:(.+);base64,(.+)$/);
+        if (!base64Match) {
+          throw new Error("Format file tidak valid.");
+        }
 
-    const mimeType = body.mimeType;
-    const mediaType = mimeType.startsWith("video/") ? "video" : "image";
-    const ext = getExtensionFromMime(mimeType);
-    const slug = sanitizeName(body.title || body.originalName || "memory");
-    const filename = `${Date.now()}-${slug}${ext}`;
-    const buffer = Buffer.from(base64Match[2], "base64");
-    const uploaded = await uploadMediaBuffer({ filename, mimeType, buffer });
-    const mediaUrl = uploaded.url.startsWith("http")
-      ? uploaded.url
-      : `${getPublicBaseUrl(req)}${uploaded.url}`;
+        const mimeType = file.mimeType || base64Match[1];
+        const mediaType = mimeType.startsWith("video/") ? "video" : "image";
+        const ext = getExtensionFromMime(mimeType);
+        const slug = sanitizeName(body.title || file.originalName || "memory");
+        const filename = `${Date.now()}-${index + 1}-${slug}${ext}`;
+        const buffer = Buffer.from(base64Match[2], "base64");
+        const uploaded = await uploadMediaBuffer({ filename, mimeType, buffer });
+        const mediaUrl = uploaded.url.startsWith("http")
+          ? uploaded.url
+          : `${getPublicBaseUrl(req)}${uploaded.url}`;
+
+        return {
+          type: mediaType,
+          filename,
+          url: mediaUrl,
+          storagePath: uploaded.storagePath
+        };
+      })
+    );
     const items = await readGallery();
+    const primaryMedia = uploadedMedia[0];
 
     const entry = {
       id: crypto.randomUUID(),
-      type: mediaType,
+      type: primaryMedia.type,
       title: body.title || "Untitled Memory",
       description: body.description || "",
-      filename,
-      url: mediaUrl,
-      storagePath: uploaded.storagePath,
+      filename: primaryMedia.filename,
+      url: primaryMedia.url,
+      storagePath: primaryMedia.storagePath,
+      media: uploadedMedia,
       createdAt: new Date().toISOString(),
       featured: Boolean(body.featured)
     };

@@ -4,7 +4,10 @@ const spotlightCard = document.getElementById("spotlight-card");
 const heartCount = document.getElementById("heart-count");
 const tileTemplate = document.getElementById("love-tile-template");
 const spotlightTemplate = document.getElementById("spotlight-template");
+const anniversaryCounter = document.getElementById("anniversary-counter");
 const API_BASE = (window.GALLERY_API_BASE || "").replace(/\/$/, "");
+
+let activeSpotlightIndex = 0;
 
 function apiUrl(path) {
   return `${API_BASE}${path}`;
@@ -100,6 +103,56 @@ function createMedia(item, mode = "detail") {
   return image;
 }
 
+function getMemoryMedia(item) {
+  if (Array.isArray(item.media) && item.media.length) {
+    return item.media;
+  }
+
+  return [
+    {
+      type: item.type,
+      filename: item.filename,
+      url: item.url,
+      storagePath: item.storagePath
+    }
+  ].filter((media) => media.url || media.filename);
+}
+
+function getMemoryCover(item) {
+  return getMemoryMedia(item)[0] || item;
+}
+
+function renderAnniversaryCounter(settings) {
+  const startDate = settings?.anniversaryDate;
+  if (!startDate) {
+    anniversaryCounter.hidden = true;
+    anniversaryCounter.innerHTML = "";
+    return;
+  }
+
+  const start = new Date(`${startDate}T00:00:00`);
+  if (Number.isNaN(start.getTime())) {
+    anniversaryCounter.hidden = true;
+    return;
+  }
+
+  const now = new Date();
+  const days = Math.max(0, Math.floor((now - start) / 86400000));
+  const years = Math.floor(days / 365);
+  const remainingDays = days % 365;
+
+  anniversaryCounter.hidden = false;
+  anniversaryCounter.innerHTML = `
+    <span class="anniversary-pill">
+      <strong>${days}</strong>
+      <span>hari bareng</span>
+    </span>
+    <span class="anniversary-copy">
+      ${years > 0 ? `${years} tahun ${remainingDays} hari` : `${remainingDays} hari`} sejak cerita ini dimulai.
+    </span>
+  `;
+}
+
 function renderFeatured(item) {
   featuredMemory.innerHTML = "";
   if (!item) return;
@@ -107,7 +160,7 @@ function renderFeatured(item) {
   const wrapper = document.createElement("div");
   wrapper.className = "featured-inner";
 
-  const media = createMedia(item, "featured");
+  const media = createMedia(getMemoryCover(item), "featured");
   media.classList.add("featured-media");
 
   const eyebrow = document.createElement("p");
@@ -127,6 +180,7 @@ function renderFeatured(item) {
 
 function renderSpotlight(item) {
   spotlightCard.innerHTML = "";
+  activeSpotlightIndex = 0;
   if (!item) {
     spotlightCard.innerHTML = `
       <article class="spotlight-empty">
@@ -145,13 +199,43 @@ function renderSpotlight(item) {
   const title = fragment.querySelector(".memory-title");
   const description = fragment.querySelector(".memory-description");
 
-  mediaShell.appendChild(createMedia(item, "detail"));
+  const mediaItems = getMemoryMedia(item);
+  const renderActiveMedia = () => {
+    mediaShell.innerHTML = "";
+    mediaShell.appendChild(createMedia(mediaItems[activeSpotlightIndex] || item, "detail"));
+  };
+
+  renderActiveMedia();
   typeLabel.textContent = item.type === "video" ? "Video" : "Photo";
   dateLabel.textContent = formatDate(item.createdAt);
   title.textContent = item.title;
   description.textContent = item.description || "Memori kecil yang tetap berarti.";
 
   spotlightCard.appendChild(fragment);
+
+  if (mediaItems.length > 1) {
+    const controls = document.createElement("div");
+    controls.className = "album-controls";
+    controls.innerHTML = `
+      <button type="button" aria-label="Media sebelumnya">Prev</button>
+      <span>${activeSpotlightIndex + 1} / ${mediaItems.length}</span>
+      <button type="button" aria-label="Media berikutnya">Next</button>
+    `;
+
+    const [prevButton, nextButton] = controls.querySelectorAll("button");
+    const counter = controls.querySelector("span");
+
+    const move = (direction) => {
+      activeSpotlightIndex =
+        (activeSpotlightIndex + direction + mediaItems.length) % mediaItems.length;
+      renderActiveMedia();
+      counter.textContent = `${activeSpotlightIndex + 1} / ${mediaItems.length}`;
+    };
+
+    prevButton.addEventListener("click", () => move(-1));
+    nextButton.addEventListener("click", () => move(1));
+    spotlightCard.querySelector(".spotlight-inner").appendChild(controls);
+  }
 }
 
 function activateTile(item, button) {
@@ -205,13 +289,21 @@ function renderHeartWall(items, heartSlots) {
     const mediaShell = fragment.querySelector(".love-tile-media");
     const title = fragment.querySelector(".love-tile-title");
 
-    mediaShell.appendChild(createMedia(item, "tile"));
+    const mediaItems = getMemoryMedia(item);
+    mediaShell.appendChild(createMedia(mediaItems[0] || item, "tile"));
     title.textContent = item.title;
     button.style.left = `${position.x}%`;
     button.style.top = `${position.y}%`;
     button.style.rotate = `${position.r}deg`;
     button.style.animationDelay = `${Math.min(index * 70, 900)}ms`;
     button.setAttribute("aria-label", `Lihat detail ${item.title}`);
+
+    if (mediaItems.length > 1) {
+      const albumBadge = document.createElement("span");
+      albumBadge.className = "album-badge";
+      albumBadge.textContent = `${mediaItems.length} files`;
+      button.appendChild(albumBadge);
+    }
 
     button.addEventListener("mouseenter", () => activateTile(item, button));
     button.addEventListener("focus", () => activateTile(item, button));
@@ -238,6 +330,7 @@ async function loadGallery() {
   const featured = items.find((item) => item.featured) || items[0];
 
   renderFeatured(featured);
+  renderAnniversaryCounter(config);
   renderHeartWall(items, config.heartSlots || 41);
 }
 

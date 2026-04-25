@@ -519,6 +519,44 @@ body::after {
   animation: riseIn 1100ms ease both;
 }
 
+.anniversary-counter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  animation: riseIn 1000ms ease both;
+}
+
+.anniversary-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(123, 75, 54, 0.12);
+  box-shadow: 0 14px 30px rgba(255, 139, 167, 0.16);
+}
+
+.anniversary-pill strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.8rem;
+  line-height: 1;
+  color: var(--accent-deep);
+}
+
+.anniversary-pill span,
+.anniversary-copy {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.anniversary-copy {
+  max-width: 260px;
+  line-height: 1.5;
+}
+
 .hero-copy,
 .hero-card,
 .love-wall-frame,
@@ -923,6 +961,22 @@ body::after {
   transition: opacity 180ms ease;
 }
 
+.album-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  padding: 6px 8px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(123, 75, 54, 0.12);
+  box-shadow: 0 8px 18px rgba(92, 58, 47, 0.12);
+  backdrop-filter: blur(10px);
+}
+
 .love-tile:hover .love-tile-overlay,
 .love-tile:focus-visible .love-tile-overlay,
 .love-tile.is-active .love-tile-overlay {
@@ -982,6 +1036,31 @@ body::after {
 .spotlight-copy {
   padding: 4px 4px 0;
   min-width: 0;
+}
+
+.album-controls {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.album-controls button {
+  border: 1px solid rgba(123, 75, 54, 0.12);
+  border-radius: 999px;
+  min-height: 36px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--text);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.album-controls span {
+  text-align: center;
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 0.86rem;
 }
 
 .spotlight-copy .memory-title {

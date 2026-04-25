@@ -14,6 +14,7 @@ const submitMemoryButton = document.getElementById("submit-memory");
 const cancelEditButton = document.getElementById("cancel-edit");
 const fileInput = document.getElementById("file");
 const heartSlotsInput = document.getElementById("heart-slots");
+const anniversaryDateInput = document.getElementById("anniversary-date");
 const API_BASE = (window.GALLERY_API_BASE || "").replace(/\/$/, "");
 
 function apiUrl(path) {
@@ -31,9 +32,10 @@ function formatDate(value) {
 }
 
 function createPreview(item) {
-  const mediaSource = item.url || `/uploads/${item.filename}`;
+  const firstMedia = getMemoryMedia(item)[0] || item;
+  const mediaSource = firstMedia.url || `/uploads/${firstMedia.filename}`;
 
-  if (item.type === "video") {
+  if (firstMedia.type === "video") {
     const video = document.createElement("video");
     video.src = mediaSource;
     video.controls = true;
@@ -46,6 +48,21 @@ function createPreview(item) {
   image.src = mediaSource;
   image.alt = item.title;
   return image;
+}
+
+function getMemoryMedia(item) {
+  if (Array.isArray(item.media) && item.media.length) {
+    return item.media;
+  }
+
+  return [
+    {
+      type: item.type,
+      filename: item.filename,
+      url: item.url,
+      storagePath: item.storagePath
+    }
+  ].filter((media) => media.url || media.filename);
 }
 
 async function request(url, options = {}) {
@@ -92,6 +109,7 @@ function setEditMode(item) {
 async function loadSettings() {
   const settings = await request("/api/site-config", { method: "GET" });
   heartSlotsInput.value = settings.heartSlots || 41;
+  anniversaryDateInput.value = settings.anniversaryDate || "";
 }
 
 async function loadAdminGallery() {
@@ -116,7 +134,9 @@ async function loadAdminGallery() {
     preview.appendChild(createPreview(item));
     title.textContent = item.title;
     description.textContent = item.description || "Tanpa deskripsi";
-    meta.textContent = `${item.type === "video" ? "Video" : "Foto"} - ${formatDate(item.createdAt)}`;
+    const mediaCount = getMemoryMedia(item).length;
+    const typeLabel = item.type === "video" ? "Video" : "Foto";
+    meta.textContent = `${typeLabel} - ${mediaCount} file - ${formatDate(item.createdAt)}`;
 
     editButton.addEventListener("click", () => {
       setEditMode(item);
@@ -170,13 +190,15 @@ settingsForm.addEventListener("submit", async (event) => {
   settingsMessage.textContent = "Menyimpan jumlah heart...";
 
   try {
-    await request("/api/admin/settings", {
+    const savedSettings = await request("/api/admin/settings", {
       method: "PUT",
       body: JSON.stringify({
-        heartSlots: Number(heartSlotsInput.value)
+        heartSlots: Number(heartSlotsInput.value),
+        anniversaryDate: anniversaryDateInput.value
       })
     });
-    settingsMessage.textContent = "Jumlah heart berhasil diperbarui.";
+    anniversaryDateInput.value = savedSettings.anniversaryDate || "";
+    settingsMessage.textContent = "Setting heart dan anniversary berhasil diperbarui.";
   } catch (error) {
     settingsMessage.textContent = error.message;
   }
@@ -187,9 +209,9 @@ uploadForm.addEventListener("submit", async (event) => {
   const editingId = editingIdInput.value;
   uploadMessage.textContent = editingId ? "Menyimpan perubahan..." : "Mengunggah memori...";
 
-  const file = fileInput.files[0];
-  if (!editingId && !file) {
-    uploadMessage.textContent = "Pilih file terlebih dahulu.";
+  const files = Array.from(fileInput.files);
+  if (!editingId && !files.length) {
+    uploadMessage.textContent = "Pilih minimal satu file terlebih dahulu.";
     return;
   }
 
@@ -204,12 +226,22 @@ uploadForm.addEventListener("submit", async (event) => {
         })
       });
     } else {
-      const fileData = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error("File gagal dibaca."));
-        reader.readAsDataURL(file);
-      });
+      const mediaFiles = await Promise.all(
+        files.map(async (file) => {
+          const fileData = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(new Error("File gagal dibaca."));
+            reader.readAsDataURL(file);
+          });
+
+          return {
+            originalName: file.name,
+            mimeType: file.type,
+            fileData
+          };
+        })
+      );
 
       await request("/api/admin/upload", {
         method: "POST",
@@ -217,9 +249,7 @@ uploadForm.addEventListener("submit", async (event) => {
           title: document.getElementById("title").value,
           description: document.getElementById("description").value,
           featured: document.getElementById("featured").checked,
-          originalName: file.name,
-          mimeType: file.type,
-          fileData
+          files: mediaFiles
         })
       });
     }
