@@ -8,6 +8,7 @@ const anniversaryCounter = document.getElementById("anniversary-counter");
 const API_BASE = (window.GALLERY_API_BASE || "").replace(/\/$/, "");
 
 let activeSpotlightIndex = 0;
+let anniversaryTimer;
 
 function apiUrl(path) {
   return `${API_BASE}${path}`;
@@ -136,21 +137,41 @@ function renderAnniversaryCounter(settings) {
     return;
   }
 
-  const now = new Date();
-  const days = Math.max(0, Math.floor((now - start) / 86400000));
-  const years = Math.floor(days / 365);
-  const remainingDays = days % 365;
-
   anniversaryCounter.hidden = false;
-  anniversaryCounter.innerHTML = `
-    <span class="anniversary-pill">
-      <strong>${days}</strong>
-      <span>hari bareng</span>
-    </span>
-    <span class="anniversary-copy">
-      ${years > 0 ? `${years} tahun ${remainingDays} hari` : `${remainingDays} hari`} sejak cerita ini dimulai.
-    </span>
-  `;
+
+  const updateCountdown = () => {
+    const now = new Date();
+    const next = new Date(now.getFullYear(), start.getMonth(), start.getDate());
+
+    if (next < now) {
+      next.setFullYear(next.getFullYear() + 1);
+    }
+
+    const diff = Math.max(0, next - now);
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+    const anniversaryYear = next.getFullYear() - start.getFullYear();
+    const title =
+      diff < 1000
+        ? "Happy anniversary day"
+        : `Menuju anniversary ${Math.max(anniversaryYear, 1)}`;
+
+    anniversaryCounter.innerHTML = `
+      <p class="anniversary-label">${title}</p>
+      <div class="countdown-grid">
+        <span><strong>${String(days).padStart(2, "0")}</strong><small>Hari</small></span>
+        <span><strong>${String(hours).padStart(2, "0")}</strong><small>Jam</small></span>
+        <span><strong>${String(minutes).padStart(2, "0")}</strong><small>Menit</small></span>
+        <span><strong>${String(seconds).padStart(2, "0")}</strong><small>Detik</small></span>
+      </div>
+    `;
+  };
+
+  clearInterval(anniversaryTimer);
+  updateCountdown();
+  anniversaryTimer = setInterval(updateCountdown, 1000);
 }
 
 function renderFeatured(item) {
