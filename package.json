@@ -9,7 +9,8 @@
   "dependencies": {
     "@google-cloud/firestore": "^7.0.0",
     "@google-cloud/storage": "^7.0.0",
-    "@vercel/analytics": "^2.0.1"
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/blob": "^2.4.1"
   },
   "license": "MIT"
 }

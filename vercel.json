@@ -1,3 +1,13 @@
 {
-  "version": 2
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/admin.html",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/admin.js",
+      "destination": "/api/index"
+    }
+  ]
 }

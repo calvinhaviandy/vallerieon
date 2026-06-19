@@ -12,7 +12,13 @@ const GOOGLE_CONFIG_STATUS = {
   privateKey: Boolean(process.env.GCP_PRIVATE_KEY),
   firestoreDatabaseId: process.env.FIRESTORE_DATABASE_ID || "(default)"
 };
+const VERCEL_BLOB_CONFIG_STATUS = {
+  storeId: Boolean(process.env.BLOB_STORE_ID),
+  token: Boolean(process.env.BLOB_READ_WRITE_TOKEN)
+};
+const USE_VERCEL_BLOB = VERCEL_BLOB_CONFIG_STATUS.token;
 const USE_GOOGLE_CLOUD =
+  !USE_VERCEL_BLOB &&
   GOOGLE_CONFIG_STATUS.bucket &&
   GOOGLE_CONFIG_STATUS.projectId &&
   GOOGLE_CONFIG_STATUS.clientEmail &&
@@ -37,10 +43,15 @@ const COOKIE_SAMESITE = process.env.COOKIE_SAMESITE || "Lax";
 const COOKIE_SECURE = IS_PRODUCTION || COOKIE_SAMESITE.toLowerCase() === "none";
 
 const PUBLIC_DIR = path.join(__dirname, "public");
+const PROTECTED_DIR = path.join(__dirname, "protected");
 const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
 const DATA_DIR = path.join(__dirname, "data");
 const GALLERY_FILE = path.join(DATA_DIR, "gallery.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
+const BLOB_DATA_PREFIX = process.env.BLOB_DATA_PREFIX || "data";
+const BLOB_UPLOAD_PREFIX = process.env.BLOB_UPLOAD_PREFIX || "uploads";
+const BLOB_GALLERY_PATH = `${BLOB_DATA_PREFIX}/gallery.json`;
+const BLOB_SETTINGS_PATH = `${BLOB_DATA_PREFIX}/settings.json`;
 const DEFAULT_SETTINGS = {
   heartSlots: 41,
   anniversaryDate: "",
@@ -52,6 +63,7 @@ const DEFAULT_SETTINGS = {
 
 let storageClientPromise;
 let firestoreClientPromise;
+let vercelBlobClientPromise;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -76,7 +88,7 @@ const mimeTypes = {
 ensureLocalStorage();
 
 function ensureLocalStorage() {
-  if (USE_GOOGLE_CLOUD) {
+  if (USE_VERCEL_BLOB || USE_GOOGLE_CLOUD) {
     return;
   }
 
@@ -323,6 +335,12 @@ function serializeError(error) {
   };
 }
 
+function getStorageBackend() {
+  if (USE_VERCEL_BLOB) return "vercel-blob";
+  if (USE_GOOGLE_CLOUD) return "google-cloud";
+  return "local";
+}
+
 async function getStorageClient() {
   if (!storageClientPromise) {
     storageClientPromise = import("@google-cloud/storage").then(({ Storage }) => {
@@ -341,11 +359,67 @@ async function getFirestoreClient() {
   return firestoreClientPromise;
 }
 
+async function getVercelBlobClient() {
+  if (!vercelBlobClientPromise) {
+    vercelBlobClientPromise = import("@vercel/blob");
+  }
+  return vercelBlobClientPromise;
+}
+
+async function readBlobJson(pathname, fallback) {
+  const { head } = await getVercelBlobClient();
+
+  try {
+    const blob = await head(pathname, {
+      token: process.env.BLOB_READ_WRITE_TOKEN
+    });
+    const response = await fetch(blob.url, { cache: "no-store" });
+    if (!response.ok) {
+      return fallback;
+    }
+    const data = await response.json();
+    if (Array.isArray(fallback)) {
+      return Array.isArray(data) ? data : fallback;
+    }
+    return {
+      ...fallback,
+      ...(data && typeof data === "object" ? data : {})
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+async function writeBlobJson(pathname, payload) {
+  const { put } = await getVercelBlobClient();
+  await put(pathname, JSON.stringify(payload, null, 2), {
+    access: "public",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: "application/json; charset=utf-8",
+    token: process.env.BLOB_READ_WRITE_TOKEN
+  });
+}
+
 async function runDeepHealthCheck() {
   const checks = {
+    vercelBlob: { ok: false },
     firestore: { ok: false },
     storage: { ok: false }
   };
+
+  if (USE_VERCEL_BLOB) {
+    try {
+      await readBlobJson(BLOB_SETTINGS_PATH, DEFAULT_SETTINGS);
+      checks.vercelBlob = { ok: true };
+    } catch (error) {
+      checks.vercelBlob = {
+        ok: false,
+        error: serializeError(error)
+      };
+    }
+    return checks;
+  }
 
   if (!USE_GOOGLE_CLOUD) {
     return checks;
@@ -377,6 +451,14 @@ async function runDeepHealthCheck() {
 }
 
 async function readGallery() {
+  if (USE_VERCEL_BLOB) {
+    const localGallery =
+      process.env.DISABLE_LOCAL_SEED !== "true" && fs.existsSync(GALLERY_FILE)
+        ? readLocalGallery()
+        : [];
+    return readBlobJson(BLOB_GALLERY_PATH, localGallery);
+  }
+
   if (USE_GOOGLE_CLOUD) {
     const db = await getFirestoreClient();
     const snapshot = await db.collection("gallery").orderBy("createdAt", "desc").get();
@@ -394,6 +476,11 @@ async function readGallery() {
 }
 
 async function writeGallery(items) {
+  if (USE_VERCEL_BLOB) {
+    await writeBlobJson(BLOB_GALLERY_PATH, items);
+    return;
+  }
+
   if (USE_GOOGLE_CLOUD) {
     const db = await getFirestoreClient();
     const collection = db.collection("gallery");
@@ -417,6 +504,14 @@ async function writeGallery(items) {
 }
 
 async function readSettings() {
+  if (USE_VERCEL_BLOB) {
+    const localSettings =
+      process.env.DISABLE_LOCAL_SEED !== "true" && fs.existsSync(SETTINGS_FILE)
+        ? readLocalSettings()
+        : DEFAULT_SETTINGS;
+    return readBlobJson(BLOB_SETTINGS_PATH, localSettings);
+  }
+
   if (USE_GOOGLE_CLOUD) {
     const db = await getFirestoreClient();
     const snapshot = await db.collection("settings").doc("app").get();
@@ -436,6 +531,11 @@ async function readSettings() {
 }
 
 async function writeSettings(settings) {
+  if (USE_VERCEL_BLOB) {
+    await writeBlobJson(BLOB_SETTINGS_PATH, settings);
+    return;
+  }
+
   if (USE_GOOGLE_CLOUD) {
     const db = await getFirestoreClient();
     await db.collection("settings").doc("app").set(settings, { merge: true });
@@ -519,21 +619,32 @@ function getPublicStorageUrl(storagePath) {
 function serveStatic(req, res) {
   const requestPath = req.url === "/" ? "/index.html" : decodeURIComponent(req.url.split("?")[0]);
 
-  if ((requestPath === "/admin.html" || requestPath === "/admin.js") && !hasAdminEntry(req)) {
-    sendText(res, 404, "Not found");
-    return;
+  let baseDir = PUBLIC_DIR;
+  let safePath = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
+
+  if (requestPath === "/admin.html" || requestPath === "/admin.js") {
+    if (!hasAdminEntry(req)) {
+      sendText(res, 404, "Not found");
+      return;
+    }
+    baseDir = PROTECTED_DIR;
+    safePath = requestPath;
   }
 
-  const safePath = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
-  let filePath = path.join(PUBLIC_DIR, safePath);
+  let filePath = path.join(baseDir, safePath);
 
-  if (!filePath.startsWith(PUBLIC_DIR)) {
+  if (!filePath.startsWith(baseDir)) {
     sendText(res, 403, "Forbidden");
     return;
   }
 
   if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-    filePath = path.join(PUBLIC_DIR, "index.html");
+    filePath = baseDir === PUBLIC_DIR ? path.join(PUBLIC_DIR, "index.html") : "";
+  }
+
+  if (!filePath || !fs.existsSync(filePath)) {
+    sendText(res, 404, "Not found");
+    return;
   }
 
   const ext = path.extname(filePath).toLowerCase();
@@ -550,6 +661,22 @@ function serveStatic(req, res) {
 }
 
 async function uploadMediaBuffer({ filename, mimeType, buffer }) {
+  if (USE_VERCEL_BLOB) {
+    const { put } = await getVercelBlobClient();
+    const storagePath = `${BLOB_UPLOAD_PREFIX}/${filename}`;
+    const blob = await put(storagePath, buffer, {
+      access: "public",
+      addRandomSuffix: false,
+      contentType: mimeType,
+      token: process.env.BLOB_READ_WRITE_TOKEN
+    });
+
+    return {
+      url: blob.url,
+      storagePath: blob.pathname || storagePath
+    };
+  }
+
   if (USE_GOOGLE_CLOUD) {
     const storage = await getStorageClient();
     const storagePath = `uploads/${filename}`;
@@ -594,6 +721,17 @@ async function deleteMediaAsset(item) {
 }
 
 async function deleteSingleMediaAsset(item) {
+  if (USE_VERCEL_BLOB) {
+    const target = item.storagePath || item.url;
+    if (target) {
+      const { del } = await getVercelBlobClient();
+      await del(target, {
+        token: process.env.BLOB_READ_WRITE_TOKEN
+      });
+    }
+    return;
+  }
+
   if (USE_GOOGLE_CLOUD) {
     if (item.storagePath) {
       const storage = await getStorageClient();
@@ -651,7 +789,8 @@ async function handleApi(req, res) {
     const deep = requestUrl.searchParams.get("deep") === "true";
     sendJson(res, 200, {
       ok: true,
-      storage: USE_GOOGLE_CLOUD ? "google-cloud" : "local",
+      storage: getStorageBackend(),
+      vercelBlobConfig: VERCEL_BLOB_CONFIG_STATUS,
       googleConfig: GOOGLE_CONFIG_STATUS,
       checks: deep ? await runDeepHealthCheck() : undefined
     });
@@ -751,6 +890,7 @@ async function handleApi(req, res) {
       return;
     }
 
+    const currentSettings = await readSettings();
     let uploadedMusic = {};
     if (musicFile?.fileData) {
       const base64Match = musicFile.fileData.match(/^data:(.+);base64,(.+)$/);
@@ -783,10 +923,18 @@ async function handleApi(req, res) {
           ? uploaded.url
           : `${getPublicBaseUrl(req)}${uploaded.url}`
       };
+
+      if (currentSettings.musicStoragePath && currentSettings.musicStoragePath !== uploadedMusic.musicStoragePath) {
+        await deleteSingleMediaAsset({
+          filename: currentSettings.musicFilename,
+          url: currentSettings.musicUrl,
+          storagePath: currentSettings.musicStoragePath
+        });
+      }
     }
 
     const nextSettings = {
-      ...(await readSettings()),
+      ...currentSettings,
       heartSlots,
       anniversaryDate,
       musicTitle,
@@ -930,6 +1078,11 @@ async function createRequestHandler(options = {}) {
         return;
       }
 
+      if (req.url.startsWith("/admin.html") || req.url.startsWith("/admin.js")) {
+        serveStatic(req, res);
+        return;
+      }
+
       if (serveStaticFiles) {
         serveStatic(req, res);
         return;
@@ -939,10 +1092,9 @@ async function createRequestHandler(options = {}) {
     } catch (error) {
       console.error(error);
       sendJson(res, 500, {
-        error: USE_GOOGLE_CLOUD
-          ? "Terjadi kesalahan pada server. Pastikan Google Cloud Storage, Firestore, dan permission service account sudah benar."
-          : "Terjadi kesalahan pada server.",
-        storage: USE_GOOGLE_CLOUD ? "google-cloud" : "local",
+        error: "Terjadi kesalahan pada server.",
+        storage: getStorageBackend(),
+        vercelBlobConfig: VERCEL_BLOB_CONFIG_STATUS,
         googleConfig: GOOGLE_CONFIG_STATUS,
         detail: serializeError(error)
       });
