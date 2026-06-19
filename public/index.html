@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Gallery of Us</title>
+    <title>Our Memory Player</title>
     <meta
       name="description"
-      content="Galeri kenangan berdua yang lucu, modern, minimalis, dan hangat."
+      content="Tempat kecil untuk mengabadikan foto, cerita, dan lagu kenangan kita."
     />
     <link rel="stylesheet" href="/styles.css" />
     <script>
@@ -15,119 +15,110 @@
     <script defer src="/_vercel/insights/script.js"></script>
   </head>
   <body>
-    <div class="ambient-garden" aria-hidden="true">
-      <div class="garden-vine garden-vine-left">
-        <span class="bloom bloom-one"></span>
-        <span class="bloom bloom-two"></span>
-        <span class="bloom bloom-three"></span>
-        <span class="leaf leaf-one"></span>
-        <span class="leaf leaf-two"></span>
-        <span class="leaf leaf-three"></span>
-      </div>
-      <div class="garden-vine garden-vine-right">
-        <span class="bloom bloom-four"></span>
-        <span class="bloom bloom-five"></span>
-        <span class="bloom bloom-six"></span>
-        <span class="leaf leaf-four"></span>
-        <span class="leaf leaf-five"></span>
-        <span class="leaf leaf-six"></span>
-      </div>
-      <div class="butterfly butterfly-one"><span></span></div>
-      <div class="butterfly butterfly-two"><span></span></div>
-      <div class="firefly firefly-one"></div>
-      <div class="firefly firefly-two"></div>
-      <div class="firefly firefly-three"></div>
-      <div class="petal petal-one"></div>
-      <div class="petal petal-two"></div>
-      <div class="petal petal-three"></div>
+    <div class="ambient-memory" aria-hidden="true">
+      <span></span>
+      <span></span>
+      <span></span>
     </div>
-    <div class="page-shell">
-      <header class="hero">
-        <div class="hero-orbit hero-orbit-one" aria-hidden="true"></div>
-        <div class="hero-orbit hero-orbit-two" aria-hidden="true"></div>
-        <nav class="topbar">
-          <div class="brand">
-            <span class="brand-dot"></span>
-            <span>Gallery of Us</span>
-          </div>
-        </nav>
 
-        <div class="hero-grid">
-          <section class="hero-copy">
-            <p class="eyebrow">A tiny internet home for two hearts</p>
-            <h1>Semua cerita kecil kita, disimpan di satu tempat yang manis.</h1>
-            <p class="hero-text">
-              Dari foto blur yang lucu sampai video yang penuh suara tawa, semuanya bisa hidup di
-              sini dan nanti bisa dibagikan ke semua orang.
-            </p>
-            <div id="anniversary-counter" class="anniversary-counter" hidden></div>
-            <div class="hero-actions">
-              <a class="button button-primary" href="#gallery">Lihat Memori</a>
-              <a class="button button-secondary" href="/admin.html">Of Us</a>
-            </div>
-          </section>
+    <div class="page-shell memory-page">
+      <main id="home" class="memory-stage">
+        <section class="carousel-shell" aria-label="Carousel memori">
+          <button id="prev-memory" class="nav-button nav-button-left" type="button" aria-label="Memori sebelumnya">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M15 5 8 12l7 7" />
+            </svg>
+          </button>
 
-          <aside class="hero-card">
-            <div class="card-sticker sticker-one">cutest archive</div>
-            <div class="card-sticker sticker-two">since forever</div>
-            <div id="featured-memory" class="featured-memory"></div>
-          </aside>
-        </div>
-      </header>
-
-      <main>
-        <section id="gallery" class="gallery-section">
-          <div class="section-heading gallery-head">
-            <div>
-              <p class="eyebrow">Mission heart</p>
-              <h2>Satu hati besar untuk diisi pelan-pelan sampai penuh oleh cerita kalian.</h2>
-            </div>
-            <p class="gallery-summary">
-              Slot kosong akan tetap terlihat sebagai siluet sampai nanti kita mengisinya.
-            </p>
-          </div>
-
-          <div class="love-wall">
-            <div class="love-wall-frame">
-              <div class="love-glow love-glow-left"></div>
-              <div class="love-glow love-glow-right"></div>
-              <div class="heart-progress">
-                <span id="heart-count">0 / 0 memories</span>
-                <span>keep filling our heart</span>
+          <div class="carousel-frame">
+            <div id="memory-track" class="memory-track"></div>
+            <article class="music-player" aria-label="Pemutar musik kenangan">
+              <div class="player-art">
+                <img id="player-art" alt="" />
               </div>
-              <div id="love-canvas" class="love-canvas" aria-live="polite"></div>
-              <aside class="memory-spotlight">
-                <p class="eyebrow">Now glowing</p>
-                <div id="spotlight-card" class="spotlight-card"></div>
-                <p class="spotlight-note">
-                  Hover atau klik salah satu tile untuk melihat memorinya.
-                </p>
-              </aside>
-            </div>
+              <div class="player-copy">
+                <p class="player-label">Now playing</p>
+                <h2 id="player-title">Our favorite memory</h2>
+                <p id="player-subtitle">Gallery of Us</p>
+              </div>
+              <div class="player-progress" aria-hidden="true">
+                <span id="progress-fill"></span>
+              </div>
+              <div class="player-controls">
+                <button id="player-prev" class="round-button" type="button" aria-label="Lagu sebelumnya">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M11 6v12l-7-6 7-6Z" />
+                    <path d="M20 6v12l-7-6 7-6Z" />
+                  </svg>
+                </button>
+                <button id="play-button" class="play-button" type="button" aria-label="Putar musik">
+                  <svg id="play-icon" aria-hidden="true" viewBox="0 0 24 24">
+                    <path class="play-shape" d="M9 7.5v9l8-4.5-8-4.5Z" />
+                    <path class="pause-shape" d="M8 6.5h3v11H8zM13 6.5h3v11h-3z" />
+                  </svg>
+                </button>
+                <button id="player-next" class="round-button" type="button" aria-label="Lagu berikutnya">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M4 6v12l7-6-7-6Z" />
+                    <path d="M13 6v12l7-6-7-6Z" />
+                  </svg>
+                </button>
+              </div>
+              <audio id="memory-audio" preload="metadata">
+                <source src="/music/our-song.mp3" type="audio/mpeg" />
+              </audio>
+            </article>
           </div>
+
+          <button id="next-memory" class="nav-button nav-button-right" type="button" aria-label="Memori berikutnya">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="m9 5 7 7-7 7" />
+            </svg>
+          </button>
+        </section>
+
+        <section class="story-panel" aria-live="polite">
+          <div class="memory-meta">
+            <span id="memory-type">Photo</span>
+            <span id="memory-date">Hari ini</span>
+          </div>
+          <h2 id="memory-title">Memuat memori...</h2>
+          <p id="memory-description">Sebentar ya, kenangannya sedang disiapkan.</p>
         </section>
       </main>
+
+      <section id="memory-wall" class="memory-wall-section" aria-labelledby="wall-title">
+        <div class="section-heading">
+          <p class="eyebrow">Konsep lama tetap hidup</p>
+          <h2 id="wall-title">Memory Wall</h2>
+          <p class="gallery-summary">
+            Semua memori yang sudah kamu upload tetap disimpan di sini sebagai arsip kecil kita.
+          </p>
+        </div>
+        <div id="memory-grid" class="memory-grid"></div>
+      </section>
     </div>
 
-    <template id="love-tile-template">
-      <button class="love-tile" type="button">
-        <span class="love-tile-media"></span>
-        <span class="love-tile-overlay">
-          <span class="love-tile-title"></span>
-        </span>
-      </button>
+    <template id="slide-template">
+      <article class="memory-slide">
+        <div class="slide-media"></div>
+        <div class="slide-caption">
+          <span class="slide-number"></span>
+          <strong class="slide-title"></strong>
+        </div>
+      </article>
     </template>
 
-    <template id="spotlight-template">
-      <article class="spotlight-inner">
-        <div class="spotlight-media-shell"></div>
-        <div class="spotlight-copy">
+    <template id="grid-template">
+      <article class="memory-card">
+        <div class="media-shell"></div>
+        <div class="memory-copy">
           <div class="memory-meta">
-            <span class="memory-type"></span>
-            <span class="memory-date"></span>
+            <span class="grid-type"></span>
+            <span class="grid-date"></span>
           </div>
-          <h3 class="memory-title"></h3>
-          <p class="memory-description"></p>
+          <h3 class="grid-title"></h3>
+          <p class="memory-description grid-description"></p>
         </div>
       </article>
     </template>
@@ -135,4 +126,4 @@
     <script src="/config.js"></script>
     <script src="/app.js" defer></script>
   </body>
-  </html>
+</html>

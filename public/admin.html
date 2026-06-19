@@ -32,28 +32,45 @@
         <div class="admin-card">
           <div class="panel-head">
             <div>
-              <p class="eyebrow">Heart settings</p>
-              <h2>Atur jumlah slot heart</h2>
+              <p class="eyebrow">Homepage settings</p>
+              <h2>Atur halaman utama</h2>
+              <p class="panel-copy">Ubah jumlah slot, tanggal hubungan, dan musik player di halaman utama.</p>
             </div>
           </div>
 
           <form id="settings-form" class="stack-form">
+            <div class="settings-grid">
+              <label>
+                <span>Jumlah slot memori</span>
+                <input
+                  id="heart-slots"
+                  type="number"
+                  min="1"
+                  max="120"
+                  placeholder="Contoh: 41"
+                  required
+                />
+              </label>
+              <label>
+                <span>Tanggal mulai hubungan</span>
+                <input id="anniversary-date" type="date" />
+              </label>
+              <label>
+                <span>Judul musik</span>
+                <input id="music-title" type="text" placeholder="Contoh: Lagu kita" />
+              </label>
+              <label>
+                <span>URL musik</span>
+                <input id="music-url" type="text" placeholder="https://... atau /uploads/..." />
+              </label>
+            </div>
             <label>
-              <span>Jumlah heart</span>
-              <input
-                id="heart-slots"
-                type="number"
-                min="1"
-                max="120"
-                placeholder="Contoh: 41"
-                required
-              />
+              <span>Upload file musik</span>
+              <input id="music-file" type="file" accept="audio/mpeg,audio/mp4,audio/ogg,audio/wav" />
+              <small class="field-note">Jika upload file baru, URL musik akan otomatis diganti.</small>
             </label>
-            <label>
-              <span>Tanggal mulai hubungan</span>
-              <input id="anniversary-date" type="date" />
-            </label>
-            <button class="button button-secondary" type="submit">Simpan jumlah heart</button>
+            <div id="current-music" class="current-music"></div>
+            <button class="button button-secondary" type="submit">Simpan setting</button>
             <p id="settings-message" class="form-message"></p>
           </form>
         </div>

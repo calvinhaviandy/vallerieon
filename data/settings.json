@@ -1,4 +1,8 @@
 {
   "heartSlots": 41,
-  "anniversaryDate": ""
+  "anniversaryDate": "",
+  "musicTitle": "Our favorite song",
+  "musicUrl": "",
+  "musicFilename": "",
+  "musicStoragePath": ""
 }

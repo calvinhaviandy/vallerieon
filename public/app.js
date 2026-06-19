@@ -1,74 +1,34 @@
-const loveCanvas = document.getElementById("love-canvas");
-const featuredMemory = document.getElementById("featured-memory");
-const spotlightCard = document.getElementById("spotlight-card");
-const heartCount = document.getElementById("heart-count");
-const tileTemplate = document.getElementById("love-tile-template");
-const spotlightTemplate = document.getElementById("spotlight-template");
+const memoryTrack = document.getElementById("memory-track");
+const memoryGrid = document.getElementById("memory-grid");
+const slideTemplate = document.getElementById("slide-template");
+const gridTemplate = document.getElementById("grid-template");
 const anniversaryCounter = document.getElementById("anniversary-counter");
+const prevMemoryButton = document.getElementById("prev-memory");
+const nextMemoryButton = document.getElementById("next-memory");
+const playerPrevButton = document.getElementById("player-prev");
+const playerNextButton = document.getElementById("player-next");
+const playButton = document.getElementById("play-button");
+const playerArt = document.getElementById("player-art");
+const playerTitle = document.getElementById("player-title");
+const playerSubtitle = document.getElementById("player-subtitle");
+const progressFill = document.getElementById("progress-fill");
+const memoryAudio = document.getElementById("memory-audio");
+const memoryTitle = document.getElementById("memory-title");
+const memoryDescription = document.getElementById("memory-description");
+const memoryType = document.getElementById("memory-type");
+const memoryDate = document.getElementById("memory-date");
 const API_BASE = (window.GALLERY_API_BASE || "").replace(/\/$/, "");
 
-let activeSpotlightIndex = 0;
+let memories = [];
+let activeIndex = 0;
 let anniversaryTimer;
+let audioContext;
+let musicNodes = [];
+let fallbackTimer;
+let usingFallbackMusic = false;
 
 function apiUrl(path) {
   return `${API_BASE}${path}`;
-}
-
-function generateHeartPositions(total) {
-  const heartRows = [
-    { width: 0.48, y: 16, offset: 0.02 },
-    { width: 0.72, y: 27, offset: 0.015 },
-    { width: 0.92, y: 38, offset: 0.008 },
-    { width: 1.02, y: 49, offset: 0 },
-    { width: 0.82, y: 61, offset: 0.008 },
-    { width: 0.64, y: 74, offset: 0.016 },
-    { width: 0.46, y: 87, offset: 0.024 },
-    { width: 0.28, y: 100, offset: 0.03 }
-  ];
-
-  const rowWeights = [4, 6, 8, 9, 6, 4, 3, 1];
-  const totalWeight = rowWeights.reduce((sum, value) => sum + value, 0);
-  const rowCounts = rowWeights.map((weight) => Math.max(1, Math.floor((total * weight) / totalWeight)));
-  let assigned = rowCounts.reduce((sum, count) => sum + count, 0);
-
-  while (assigned < total) {
-    const targetRow = rowCounts.indexOf(Math.min(...rowCounts.slice(1, 6))) + 1;
-    rowCounts[targetRow] += 1;
-    assigned += 1;
-  }
-
-  while (assigned > total) {
-    const targetRow = rowCounts.indexOf(Math.max(...rowCounts));
-    if (rowCounts[targetRow] > 1) {
-      rowCounts[targetRow] -= 1;
-      assigned -= 1;
-    } else {
-      break;
-    }
-  }
-
-  const positions = [];
-
-  heartRows.forEach((row, rowIndex) => {
-    const count = rowCounts[rowIndex];
-    const usableWidth = row.width * 100;
-    const startX = 50 - usableWidth / 2 + row.offset * 100;
-    const endX = 50 + usableWidth / 2 + row.offset * 100;
-
-    for (let index = 0; index < count; index += 1) {
-      const progress = count === 1 ? 0.5 : index / Math.max(count - 1, 1);
-      const x = startX + (endX - startX) * progress;
-      const arcLift = Math.sin(progress * Math.PI) * (rowIndex < 4 ? 1.6 : 0.8);
-
-      positions.push({
-        x,
-        y: row.y - arcLift,
-        r: ((rowIndex + index) % 5) * 2.5 - 5
-      });
-    }
-  });
-
-  return positions.slice(0, total);
 }
 
 function formatDate(value) {
@@ -77,31 +37,6 @@ function formatDate(value) {
     month: "long",
     year: "numeric"
   });
-}
-
-function createMedia(item, mode = "detail") {
-  const mediaSource = item.url || `/uploads/${item.filename}`;
-
-  if (item.type === "video") {
-    const video = document.createElement("video");
-    video.src = mediaSource;
-    video.preload = "metadata";
-    video.playsInline = true;
-    if (mode === "tile") {
-      video.muted = true;
-      video.loop = true;
-      video.autoplay = true;
-    } else {
-      video.controls = true;
-    }
-    return video;
-  }
-
-  const image = document.createElement("img");
-  image.src = mediaSource;
-  image.alt = item.title;
-  image.loading = "lazy";
-  return image;
 }
 
 function getMemoryMedia(item) {
@@ -119,11 +54,42 @@ function getMemoryMedia(item) {
   ].filter((media) => media.url || media.filename);
 }
 
-function getMemoryCover(item) {
+function getCover(item) {
   return getMemoryMedia(item)[0] || item;
 }
 
+function getMediaSource(media) {
+  return media.url || `/uploads/${media.filename}`;
+}
+
+function createMedia(media, title, mode = "slide") {
+  const mediaSource = getMediaSource(media);
+
+  if (media.type === "video") {
+    const video = document.createElement("video");
+    video.src = mediaSource;
+    video.preload = "metadata";
+    video.playsInline = true;
+    video.muted = mode !== "detail";
+    video.loop = mode !== "detail";
+    if (mode !== "detail") {
+      video.autoplay = true;
+    } else {
+      video.controls = true;
+    }
+    return video;
+  }
+
+  const image = document.createElement("img");
+  image.src = mediaSource;
+  image.alt = title;
+  image.loading = "lazy";
+  return image;
+}
+
 function renderAnniversaryCounter(settings) {
+  if (!anniversaryCounter) return;
+
   const startDate = settings?.anniversaryDate;
   if (!startDate) {
     anniversaryCounter.hidden = true;
@@ -153,13 +119,9 @@ function renderAnniversaryCounter(settings) {
     const minutes = Math.floor((diff % 3600000) / 60000);
     const seconds = Math.floor((diff % 60000) / 1000);
     const anniversaryYear = next.getFullYear() - start.getFullYear();
-    const title =
-      diff < 1000
-        ? "Happy anniversary day"
-        : `Menuju anniversary ${Math.max(anniversaryYear, 1)}`;
 
     anniversaryCounter.innerHTML = `
-      <p class="anniversary-label">${title}</p>
+      <p class="anniversary-label">Menuju anniversary ${Math.max(anniversaryYear, 1)}</p>
       <div class="countdown-grid">
         <span><strong>${String(days).padStart(2, "0")}</strong><small>Hari</small></span>
         <span><strong>${String(hours).padStart(2, "0")}</strong><small>Jam</small></span>
@@ -174,187 +136,255 @@ function renderAnniversaryCounter(settings) {
   anniversaryTimer = setInterval(updateCountdown, 1000);
 }
 
-function renderFeatured(item) {
-  featuredMemory.innerHTML = "";
-  if (!item) return;
+function updateActiveMemory() {
+  if (!memories.length) return;
 
-  const wrapper = document.createElement("div");
-  wrapper.className = "featured-inner";
+  const active = memories[activeIndex];
+  const cover = getCover(active);
+  const coverSource = getMediaSource(cover);
 
-  const media = createMedia(getMemoryCover(item), "featured");
-  media.classList.add("featured-media");
+  document.querySelectorAll(".memory-slide").forEach((slide, index) => {
+    const offset = index - activeIndex;
+    const isActive = index === activeIndex;
+    const isNear = Math.abs(offset) === 1;
 
-  const eyebrow = document.createElement("p");
-  eyebrow.className = "eyebrow";
-  eyebrow.textContent = item.type === "video" ? "Featured video" : "Featured memory";
+    slide.style.setProperty("--slide-x", `${offset * 54}%`);
+    slide.style.setProperty("--slide-scale", isActive ? "1" : "0.78");
+    slide.style.setProperty("--slide-rotate", `${offset * -12}deg`);
+    slide.classList.toggle("is-active", isActive);
+    slide.classList.toggle("is-near", isNear);
+  });
 
-  const title = document.createElement("h3");
-  title.textContent = item.title;
-
-  const desc = document.createElement("p");
-  desc.className = "hero-text";
-  desc.textContent = item.description || "Momen manis yang selalu seru untuk diingat lagi.";
-
-  wrapper.append(eyebrow, media, title, desc);
-  featuredMemory.appendChild(wrapper);
+  playerArt.src = coverSource;
+  playerArt.alt = active.title;
+  if (!playerTitle.dataset.customMusicTitle) {
+    playerTitle.textContent = active.title;
+  }
+  playerSubtitle.textContent = active.description || "Gallery of Us";
+  memoryTitle.textContent = active.title;
+  memoryDescription.textContent = active.description || "Memori kecil yang tetap berarti.";
+  memoryType.textContent = active.type === "video" ? "Video" : "Photo";
+  memoryDate.textContent = formatDate(active.createdAt);
 }
 
-function renderSpotlight(item) {
-  spotlightCard.innerHTML = "";
-  activeSpotlightIndex = 0;
-  if (!item) {
-    spotlightCard.innerHTML = `
-      <article class="spotlight-empty">
-        <p class="eyebrow">First mission</p>
-        <h3>Heart ini menunggu foto pertama kalian.</h3>
-        <p class="memory-description">Upload memori dari admin panel, lalu isi slot-slot kosongnya satu per satu.</p>
+function moveCarousel(direction) {
+  if (!memories.length) return;
+  activeIndex = (activeIndex + direction + memories.length) % memories.length;
+  updateActiveMemory();
+}
+
+function renderCarousel(items) {
+  memoryTrack.innerHTML = "";
+
+  if (!items.length) {
+    memoryTrack.innerHTML = `
+      <article class="empty-state">
+        <h2>Belum ada memori.</h2>
+        <p>Upload foto atau video dari panel admin, lalu carousel ini akan langsung terisi.</p>
       </article>
     `;
+    memoryTitle.textContent = "Belum ada memori";
+    memoryDescription.textContent = "Carousel akan hidup setelah kamu upload foto pertama.";
     return;
   }
 
-  const fragment = spotlightTemplate.content.cloneNode(true);
-  const mediaShell = fragment.querySelector(".spotlight-media-shell");
-  const typeLabel = fragment.querySelector(".memory-type");
-  const dateLabel = fragment.querySelector(".memory-date");
-  const title = fragment.querySelector(".memory-title");
-  const description = fragment.querySelector(".memory-description");
+  items.forEach((item, index) => {
+    const fragment = slideTemplate.content.cloneNode(true);
+    const slide = fragment.querySelector(".memory-slide");
+    const mediaShell = fragment.querySelector(".slide-media");
+    const slideNumber = fragment.querySelector(".slide-number");
+    const slideTitle = fragment.querySelector(".slide-title");
+    const cover = getCover(item);
 
-  const mediaItems = getMemoryMedia(item);
-  const renderActiveMedia = () => {
-    mediaShell.innerHTML = "";
-    mediaShell.appendChild(createMedia(mediaItems[activeSpotlightIndex] || item, "detail"));
-  };
+    slide.setAttribute("aria-label", item.title);
+    mediaShell.appendChild(createMedia(cover, item.title));
+    slideNumber.textContent = String(index + 1).padStart(2, "0");
+    slideTitle.textContent = item.title;
+    slide.addEventListener("click", () => {
+      activeIndex = index;
+      updateActiveMemory();
+    });
 
-  renderActiveMedia();
-  typeLabel.textContent = item.type === "video" ? "Video" : "Photo";
-  dateLabel.textContent = formatDate(item.createdAt);
-  title.textContent = item.title;
-  description.textContent = item.description || "Memori kecil yang tetap berarti.";
-
-  spotlightCard.appendChild(fragment);
-
-  if (mediaItems.length > 1) {
-    const controls = document.createElement("div");
-    controls.className = "album-controls";
-    controls.innerHTML = `
-      <button type="button" aria-label="Media sebelumnya">Prev</button>
-      <span>${activeSpotlightIndex + 1} / ${mediaItems.length}</span>
-      <button type="button" aria-label="Media berikutnya">Next</button>
-    `;
-
-    const [prevButton, nextButton] = controls.querySelectorAll("button");
-    const counter = controls.querySelector("span");
-
-    const move = (direction) => {
-      activeSpotlightIndex =
-        (activeSpotlightIndex + direction + mediaItems.length) % mediaItems.length;
-      renderActiveMedia();
-      counter.textContent = `${activeSpotlightIndex + 1} / ${mediaItems.length}`;
-    };
-
-    prevButton.addEventListener("click", () => move(-1));
-    nextButton.addEventListener("click", () => move(1));
-    spotlightCard.querySelector(".spotlight-inner").appendChild(controls);
-  }
-}
-
-function activateTile(item, button) {
-  loveCanvas.querySelectorAll(".love-tile").forEach((tile) => tile.classList.remove("is-active"));
-  if (button) {
-    button.classList.add("is-active");
-  }
-  renderSpotlight(item);
-}
-
-function createPlaceholder(position, index) {
-  const placeholder = document.createElement("div");
-  placeholder.className = "love-tile love-tile-empty";
-  placeholder.style.left = `${position.x}%`;
-  placeholder.style.top = `${position.y}%`;
-  placeholder.style.rotate = `${position.r}deg`;
-  placeholder.style.animationDelay = `${Math.min(index * 40, 900)}ms`;
-  placeholder.innerHTML = `
-    <span class="love-tile-placeholder">
-      <span class="placeholder-heart"></span>
-      <span class="placeholder-label">Empty Memory</span>
-    </span>
-  `;
-  return placeholder;
-}
-
-function renderHeartWall(items, heartSlots) {
-  const heartPositions = generateHeartPositions(heartSlots);
-  loveCanvas.innerHTML = "";
-  heartCount.textContent = `${items.length} / ${heartPositions.length} memories`;
-  const widestRow = heartPositions.reduce((accumulator, position) => {
-    const key = Math.round(position.y);
-    accumulator[key] = (accumulator[key] || 0) + 1;
-    return accumulator;
-  }, {});
-  const maxRowCount = Math.max(...Object.values(widestRow));
-  const visualTileSize = 78 / Math.max(maxRowCount, 1);
-  const tileSize = Math.max(8.8, Math.min(12.8, visualTileSize));
-  loveCanvas.style.setProperty("--tile-size", `${tileSize}%`);
-
-  heartPositions.forEach((position, index) => {
-    const item = items[index];
-
-    if (!item) {
-      loveCanvas.appendChild(createPlaceholder(position, index));
-      return;
-    }
-
-    const fragment = tileTemplate.content.cloneNode(true);
-    const button = fragment.querySelector(".love-tile");
-    const mediaShell = fragment.querySelector(".love-tile-media");
-    const title = fragment.querySelector(".love-tile-title");
-
-    const mediaItems = getMemoryMedia(item);
-    mediaShell.appendChild(createMedia(mediaItems[0] || item, "tile"));
-    title.textContent = item.title;
-    button.style.left = `${position.x}%`;
-    button.style.top = `${position.y}%`;
-    button.style.rotate = `${position.r}deg`;
-    button.style.animationDelay = `${Math.min(index * 70, 900)}ms`;
-    button.setAttribute("aria-label", `Lihat detail ${item.title}`);
-
-    if (mediaItems.length > 1) {
-      const albumBadge = document.createElement("span");
-      albumBadge.className = "album-badge";
-      albumBadge.textContent = `${mediaItems.length} files`;
-      button.appendChild(albumBadge);
-    }
-
-    button.addEventListener("mouseenter", () => activateTile(item, button));
-    button.addEventListener("focus", () => activateTile(item, button));
-    button.addEventListener("click", () => activateTile(item, button));
-
-    loveCanvas.appendChild(button);
+    memoryTrack.appendChild(fragment);
   });
 
-  if (items[0]) {
-    activateTile(items[0], loveCanvas.querySelector(".love-tile"));
-  } else {
-    renderSpotlight(null);
+  updateActiveMemory();
+}
+
+async function openAdminFromShortcut() {
+  try {
+    await fetch(apiUrl("/api/admin/shortcut"), {
+      method: "POST",
+      credentials: "include"
+    });
+    window.location.href = "/admin.html";
+  } catch (error) {
+    window.location.href = "/";
   }
+}
+
+function renderMemoryGrid(items) {
+  memoryGrid.innerHTML = "";
+
+  if (!items.length) {
+    memoryGrid.innerHTML = "<p class=\"gallery-summary\">Belum ada arsip memori.</p>";
+    return;
+  }
+
+  items.forEach((item) => {
+    const fragment = gridTemplate.content.cloneNode(true);
+    const mediaShell = fragment.querySelector(".media-shell");
+    const type = fragment.querySelector(".grid-type");
+    const date = fragment.querySelector(".grid-date");
+    const title = fragment.querySelector(".grid-title");
+    const description = fragment.querySelector(".grid-description");
+    const cover = getCover(item);
+
+    mediaShell.appendChild(createMedia(cover, item.title));
+    type.textContent = item.type === "video" ? "Video" : "Photo";
+    date.textContent = formatDate(item.createdAt);
+    title.textContent = item.title;
+    description.textContent = item.description || "Memori kecil yang tetap berarti.";
+
+    memoryGrid.appendChild(fragment);
+  });
+}
+
+function startFallbackMusic() {
+  audioContext = audioContext || new (window.AudioContext || window.webkitAudioContext)();
+  usingFallbackMusic = true;
+
+  const playChord = () => {
+    const now = audioContext.currentTime;
+    const gain = audioContext.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.08, now + 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.6);
+    gain.connect(audioContext.destination);
+
+    [261.63, 329.63, 392, 523.25].forEach((frequency, index) => {
+      const oscillator = audioContext.createOscillator();
+      oscillator.type = index === 0 ? "sine" : "triangle";
+      oscillator.frequency.value = frequency;
+      oscillator.connect(gain);
+      oscillator.start(now + index * 0.08);
+      oscillator.stop(now + 2.8);
+      musicNodes.push(oscillator);
+    });
+
+    musicNodes.push(gain);
+  };
+
+  playChord();
+  fallbackTimer = setInterval(playChord, 2800);
+}
+
+function stopFallbackMusic() {
+  clearInterval(fallbackTimer);
+  musicNodes.forEach((node) => {
+    try {
+      node.stop?.();
+      node.disconnect?.();
+    } catch (error) {
+      node.disconnect?.();
+    }
+  });
+  musicNodes = [];
+  usingFallbackMusic = false;
+}
+
+async function toggleMusic() {
+  if (usingFallbackMusic || !memoryAudio.paused) {
+    memoryAudio.pause();
+    stopFallbackMusic();
+    playButton.classList.remove("is-playing");
+    playButton.setAttribute("aria-label", "Putar musik");
+    return;
+  }
+
+  try {
+    await memoryAudio.play();
+  } catch (error) {
+    startFallbackMusic();
+  }
+
+  playButton.classList.add("is-playing");
+  playButton.setAttribute("aria-label", "Jeda musik");
+}
+
+function updateProgress() {
+  if (memoryAudio.duration) {
+    progressFill.style.width = `${(memoryAudio.currentTime / memoryAudio.duration) * 100}%`;
+    return;
+  }
+
+  const width = Number.parseFloat(progressFill.style.width || "0");
+  progressFill.style.width = `${(width + 0.22) % 100}%`;
+  requestAnimationFrame(updateProgress);
 }
 
 async function loadGallery() {
-  loveCanvas.innerHTML = "<p>Memuat kenangan...</p>";
+  memoryTrack.innerHTML = "<p class=\"gallery-summary\">Memuat kenangan...</p>";
   const [galleryResponse, configResponse] = await Promise.all([
     fetch(apiUrl("/api/gallery"), { credentials: "include" }),
     fetch(apiUrl("/api/site-config"), { credentials: "include" })
   ]);
-  const items = await galleryResponse.json();
-  const config = await configResponse.json();
-  const featured = items.find((item) => item.featured) || items[0];
 
-  renderFeatured(featured);
+  memories = await galleryResponse.json();
+  const config = await configResponse.json();
+  const featured = memories.findIndex((item) => item.featured);
+  activeIndex = featured >= 0 ? featured : 0;
+
   renderAnniversaryCounter(config);
-  renderHeartWall(items, config.heartSlots || 41);
+  renderMusicSettings(config);
+  renderCarousel(memories);
+  renderMemoryGrid(memories);
 }
 
+function renderMusicSettings(config) {
+  const configuredMusicUrl = config?.musicUrl || "/music/our-song.mp3";
+  const configuredMusicTitle = config?.musicTitle || "";
+
+  if (configuredMusicUrl) {
+    memoryAudio.src = configuredMusicUrl;
+    memoryAudio.load();
+  }
+
+  if (configuredMusicTitle) {
+    playerTitle.textContent = configuredMusicTitle;
+    playerTitle.dataset.customMusicTitle = "true";
+  } else {
+    delete playerTitle.dataset.customMusicTitle;
+  }
+}
+
+prevMemoryButton.addEventListener("click", () => moveCarousel(-1));
+nextMemoryButton.addEventListener("click", () => moveCarousel(1));
+playerPrevButton.addEventListener("click", () => moveCarousel(-1));
+playerNextButton.addEventListener("click", () => moveCarousel(1));
+playButton.addEventListener("click", toggleMusic);
+memoryAudio.addEventListener("timeupdate", updateProgress);
+memoryAudio.addEventListener("ended", () => {
+  playButton.classList.remove("is-playing");
+  progressFill.style.width = "0%";
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "r") {
+    event.preventDefault();
+    openAdminFromShortcut();
+    return;
+  }
+
+  if (event.key === "ArrowLeft") moveCarousel(-1);
+  if (event.key === "ArrowRight") moveCarousel(1);
+  if (event.key === " " && event.target === document.body) {
+    event.preventDefault();
+    toggleMusic();
+  }
+});
+
+updateProgress();
 loadGallery().catch(() => {
-  loveCanvas.innerHTML = "<p>Galeri belum bisa dimuat sekarang.</p>";
+  memoryTrack.innerHTML = "<p class=\"gallery-summary\">Galeri belum bisa dimuat sekarang.</p>";
 });

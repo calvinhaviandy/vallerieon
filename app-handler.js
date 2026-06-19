@@ -41,7 +41,14 @@ const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
 const DATA_DIR = path.join(__dirname, "data");
 const GALLERY_FILE = path.join(DATA_DIR, "gallery.json");
 const SETTINGS_FILE = path.join(DATA_DIR, "settings.json");
-const DEFAULT_SETTINGS = { heartSlots: 41, anniversaryDate: "" };
+const DEFAULT_SETTINGS = {
+  heartSlots: 41,
+  anniversaryDate: "",
+  musicTitle: "Our favorite song",
+  musicUrl: "",
+  musicFilename: "",
+  musicStoragePath: ""
+};
 
 let storageClientPromise;
 let firestoreClientPromise;
@@ -56,6 +63,10 @@ const mimeTypes = {
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".webp": "image/webp",
+  ".mp3": "audio/mpeg",
+  ".m4a": "audio/mp4",
+  ".ogg": "audio/ogg",
+  ".wav": "audio/wav",
   ".mp4": "video/mp4",
   ".webm": "video/webm",
   ".mov": "video/quicktime",
@@ -86,7 +97,10 @@ function readLocalGallery() {
 }
 
 function readLocalSettings() {
-  return JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"));
+  return {
+    ...DEFAULT_SETTINGS,
+    ...JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf8"))
+  };
 }
 
 function sendJson(res, statusCode, payload) {
@@ -149,6 +163,22 @@ function getSessionCookieParts(value, maxAge) {
   return cookieParts;
 }
 
+function getAdminEntryCookieParts(value, maxAge) {
+  const cookieParts = [
+    `admin_entry=${value}`,
+    "HttpOnly",
+    "Path=/",
+    `SameSite=${COOKIE_SAMESITE}`,
+    `Max-Age=${maxAge}`
+  ];
+
+  if (COOKIE_SECURE) {
+    cookieParts.push("Secure");
+  }
+
+  return cookieParts;
+}
+
 function parseCookies(req) {
   const header = req.headers.cookie || "";
   return Object.fromEntries(
@@ -190,6 +220,16 @@ function createSessionToken() {
   return `${payload}.${signSession(payload)}`;
 }
 
+function createAdminEntryToken() {
+  const payload = toBase64Url(
+    JSON.stringify({
+      purpose: "admin-entry",
+      exp: Date.now() + 1000 * 60 * 5
+    })
+  );
+  return `${payload}.${signSession(payload)}`;
+}
+
 function verifySessionToken(token) {
   if (!token || !token.includes(".")) {
     return false;
@@ -208,9 +248,32 @@ function verifySessionToken(token) {
   }
 }
 
+function verifyAdminEntryToken(token) {
+  if (!token || !token.includes(".")) {
+    return false;
+  }
+
+  const [payload, signature] = token.split(".");
+  if (signature !== signSession(payload)) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(fromBase64Url(payload));
+    return parsed.purpose === "admin-entry" && typeof parsed.exp === "number" && parsed.exp > Date.now();
+  } catch {
+    return false;
+  }
+}
+
 function isAuthenticated(req) {
   const cookies = parseCookies(req);
   return verifySessionToken(cookies.session);
+}
+
+function hasAdminEntry(req) {
+  const cookies = parseCookies(req);
+  return verifyAdminEntryToken(cookies.admin_entry);
 }
 
 function getGoogleClientOptions() {
@@ -421,6 +484,11 @@ function getExtensionFromMime(mimeType) {
     "image/png": ".png",
     "image/webp": ".webp",
     "image/svg+xml": ".svg",
+    "audio/mpeg": ".mp3",
+    "audio/mp3": ".mp3",
+    "audio/mp4": ".m4a",
+    "audio/ogg": ".ogg",
+    "audio/wav": ".wav",
     "video/mp4": ".mp4",
     "video/webm": ".webm",
     "video/quicktime": ".mov"
@@ -450,6 +518,12 @@ function getPublicStorageUrl(storagePath) {
 
 function serveStatic(req, res) {
   const requestPath = req.url === "/" ? "/index.html" : decodeURIComponent(req.url.split("?")[0]);
+
+  if ((requestPath === "/admin.html" || requestPath === "/admin.js") && !hasAdminEntry(req)) {
+    sendText(res, 404, "Not found");
+    return;
+  }
+
   const safePath = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
   let filePath = path.join(PUBLIC_DIR, safePath);
 
@@ -595,6 +669,18 @@ async function handleApi(req, res) {
     return;
   }
 
+  if (req.method === "POST" && pathname === "/api/admin/shortcut") {
+    const token = createAdminEntryToken();
+    const cookieParts = getAdminEntryCookieParts(token, 300);
+
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Set-Cookie": cookieParts.join("; ")
+    });
+    res.end(JSON.stringify({ success: true }));
+    return;
+  }
+
   if (req.method === "POST" && pathname === "/api/admin/login") {
     const body = await parseBody(req).catch(() => null);
     if (!body || body.password !== ADMIN_PASSWORD) {
@@ -638,6 +724,9 @@ async function handleApi(req, res) {
     const body = await parseBody(req).catch(() => null);
     const heartSlots = Number(body?.heartSlots);
     const anniversaryDate = body?.anniversaryDate || "";
+    const musicTitle = body?.musicTitle || "";
+    const musicUrl = body?.musicUrl || "";
+    const musicFile = body?.musicFile || null;
     const galleryCount = (await readGallery()).length;
 
     if (!Number.isInteger(heartSlots) || heartSlots < 1 || heartSlots > 120) {
@@ -657,10 +746,52 @@ async function handleApi(req, res) {
       return;
     }
 
+    if (musicUrl && !/^https?:\/\/.+|^\/.+/.test(musicUrl)) {
+      sendJson(res, 400, { error: "URL musik harus diawali http://, https://, atau /." });
+      return;
+    }
+
+    let uploadedMusic = {};
+    if (musicFile?.fileData) {
+      const base64Match = musicFile.fileData.match(/^data:(.+);base64,(.+)$/);
+      if (!base64Match) {
+        sendJson(res, 400, { error: "Format file musik tidak valid." });
+        return;
+      }
+
+      const mimeType = musicFile.mimeType || base64Match[1];
+      if (!mimeType.startsWith("audio/")) {
+        sendJson(res, 400, { error: "File musik harus berupa audio." });
+        return;
+      }
+
+      const ext = getExtensionFromMime(mimeType);
+      if (!ext) {
+        sendJson(res, 400, { error: "Format musik belum didukung." });
+        return;
+      }
+
+      const slug = sanitizeName(musicTitle || musicFile.originalName || "our-song");
+      const filename = `${Date.now()}-music-${slug}${ext}`;
+      const buffer = Buffer.from(base64Match[2], "base64");
+      const uploaded = await uploadMediaBuffer({ filename, mimeType, buffer });
+
+      uploadedMusic = {
+        musicFilename: filename,
+        musicStoragePath: uploaded.storagePath,
+        musicUrl: uploaded.url.startsWith("http")
+          ? uploaded.url
+          : `${getPublicBaseUrl(req)}${uploaded.url}`
+      };
+    }
+
     const nextSettings = {
       ...(await readSettings()),
       heartSlots,
-      anniversaryDate
+      anniversaryDate,
+      musicTitle,
+      musicUrl,
+      ...uploadedMusic
     };
     await writeSettings(nextSettings);
     sendJson(res, 200, nextSettings);

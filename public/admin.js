@@ -15,6 +15,10 @@ const cancelEditButton = document.getElementById("cancel-edit");
 const fileInput = document.getElementById("file");
 const heartSlotsInput = document.getElementById("heart-slots");
 const anniversaryDateInput = document.getElementById("anniversary-date");
+const musicTitleInput = document.getElementById("music-title");
+const musicUrlInput = document.getElementById("music-url");
+const musicFileInput = document.getElementById("music-file");
+const currentMusic = document.getElementById("current-music");
 const API_BASE = (window.GALLERY_API_BASE || "").replace(/\/$/, "");
 
 function apiUrl(path) {
@@ -110,6 +114,28 @@ async function loadSettings() {
   const settings = await request("/api/site-config", { method: "GET" });
   heartSlotsInput.value = settings.heartSlots || 41;
   anniversaryDateInput.value = settings.anniversaryDate || "";
+  musicTitleInput.value = settings.musicTitle || "";
+  musicUrlInput.value = settings.musicUrl || "";
+  renderCurrentMusic(settings);
+}
+
+function renderCurrentMusic(settings) {
+  const musicUrl = settings.musicUrl || "";
+  const musicTitle = settings.musicTitle || "Belum ada judul musik";
+
+  currentMusic.classList.toggle("is-visible", Boolean(musicUrl));
+  currentMusic.innerHTML = musicUrl
+    ? `<strong>Musik aktif:</strong> ${musicTitle}<br>${musicUrl}`
+    : "";
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("File gagal dibaca."));
+    reader.readAsDataURL(file);
+  });
 }
 
 async function loadAdminGallery() {
@@ -187,18 +213,33 @@ loginForm.addEventListener("submit", async (event) => {
 
 settingsForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  settingsMessage.textContent = "Menyimpan jumlah heart...";
+  settingsMessage.textContent = "Menyimpan setting...";
 
   try {
+    const musicFile = musicFileInput.files[0]
+      ? {
+          originalName: musicFileInput.files[0].name,
+          mimeType: musicFileInput.files[0].type,
+          fileData: await readFileAsDataUrl(musicFileInput.files[0])
+        }
+      : null;
+
     const savedSettings = await request("/api/admin/settings", {
       method: "PUT",
       body: JSON.stringify({
         heartSlots: Number(heartSlotsInput.value),
-        anniversaryDate: anniversaryDateInput.value
+        anniversaryDate: anniversaryDateInput.value,
+        musicTitle: musicTitleInput.value,
+        musicUrl: musicUrlInput.value,
+        musicFile
       })
     });
     anniversaryDateInput.value = savedSettings.anniversaryDate || "";
-    settingsMessage.textContent = "Setting heart dan anniversary berhasil diperbarui.";
+    musicTitleInput.value = savedSettings.musicTitle || "";
+    musicUrlInput.value = savedSettings.musicUrl || "";
+    musicFileInput.value = "";
+    renderCurrentMusic(savedSettings);
+    settingsMessage.textContent = "Setting halaman utama berhasil diperbarui.";
   } catch (error) {
     settingsMessage.textContent = error.message;
   }
@@ -228,12 +269,7 @@ uploadForm.addEventListener("submit", async (event) => {
     } else {
       const mediaFiles = await Promise.all(
         files.map(async (file) => {
-          const fileData = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = () => reject(new Error("File gagal dibaca."));
-            reader.readAsDataURL(file);
-          });
+          const fileData = await readFileAsDataUrl(file);
 
           return {
             originalName: file.name,
