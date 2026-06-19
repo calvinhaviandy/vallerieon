@@ -5,6 +5,8 @@ const crypto = require("crypto");
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "galleryofus";
 const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || ADMIN_PASSWORD;
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
+const BLOB_STORE_ID = normalizeEnvValue(process.env.BLOB_STORE_ID);
+const BLOB_READ_WRITE_TOKEN = normalizeEnvValue(process.env.BLOB_READ_WRITE_TOKEN);
 const GOOGLE_CONFIG_STATUS = {
   bucket: Boolean(process.env.GCS_BUCKET_NAME),
   projectId: Boolean(process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT),
@@ -13,8 +15,8 @@ const GOOGLE_CONFIG_STATUS = {
   firestoreDatabaseId: process.env.FIRESTORE_DATABASE_ID || "(default)"
 };
 const VERCEL_BLOB_CONFIG_STATUS = {
-  storeId: Boolean(process.env.BLOB_STORE_ID),
-  token: Boolean(process.env.BLOB_READ_WRITE_TOKEN)
+  storeId: Boolean(BLOB_STORE_ID),
+  token: Boolean(BLOB_READ_WRITE_TOKEN)
 };
 const USE_VERCEL_BLOB = VERCEL_BLOB_CONFIG_STATUS.token;
 const USE_GOOGLE_CLOUD =
@@ -322,6 +324,10 @@ function normalizePrivateKey(value) {
     .replace(/\\n/g, "\n");
 }
 
+function normalizeEnvValue(value) {
+  return (value || "").trim().replace(/^["']|["']$/g, "");
+}
+
 function serializeError(error) {
   const message = error?.message || "Unknown error";
   return {
@@ -329,9 +335,11 @@ function serializeError(error) {
     code: error?.code || error?.status || "",
     message,
     hint:
-      error?.code === 5 || message.includes("NOT_FOUND")
-        ? "Firestore database tidak ditemukan. Buat Firestore database di Google Cloud, atau isi FIRESTORE_DATABASE_ID kalau database ID kamu bukan (default)."
-        : undefined
+      message.toLowerCase().includes("blob") || message.toLowerCase().includes("token")
+        ? "Cek env Vercel BLOB_READ_WRITE_TOKEN dan BLOB_STORE_ID. Isi value tanpa tanda kutip."
+        : error?.code === 5 || message.includes("NOT_FOUND")
+          ? "Firestore database tidak ditemukan. Buat Firestore database di Google Cloud, atau isi FIRESTORE_DATABASE_ID kalau database ID kamu bukan (default)."
+          : undefined
   };
 }
 
@@ -371,7 +379,7 @@ async function readBlobJson(pathname, fallback) {
 
   try {
     const blob = await head(pathname, {
-      token: process.env.BLOB_READ_WRITE_TOKEN
+      token: BLOB_READ_WRITE_TOKEN
     });
     const response = await fetch(blob.url, { cache: "no-store" });
     if (!response.ok) {
@@ -397,7 +405,7 @@ async function writeBlobJson(pathname, payload) {
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: "application/json; charset=utf-8",
-    token: process.env.BLOB_READ_WRITE_TOKEN
+    token: BLOB_READ_WRITE_TOKEN
   });
 }
 
@@ -668,7 +676,7 @@ async function uploadMediaBuffer({ filename, mimeType, buffer }) {
       access: "public",
       addRandomSuffix: false,
       contentType: mimeType,
-      token: process.env.BLOB_READ_WRITE_TOKEN
+      token: BLOB_READ_WRITE_TOKEN
     });
 
     return {
@@ -726,7 +734,7 @@ async function deleteSingleMediaAsset(item) {
     if (target) {
       const { del } = await getVercelBlobClient();
       await del(target, {
-        token: process.env.BLOB_READ_WRITE_TOKEN
+        token: BLOB_READ_WRITE_TOKEN
       });
     }
     return;

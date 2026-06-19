@@ -80,7 +80,9 @@ async function request(url, options = {}) {
 
   const data = await response.json();
   if (!response.ok) {
-    const error = new Error(data.error || "Terjadi kesalahan.");
+    const detailMessage = data.detail?.message ? ` (${data.detail.message})` : "";
+    const hintMessage = data.detail?.hint ? ` ${data.detail.hint}` : "";
+    const error = new Error(`${data.error || "Terjadi kesalahan."}${detailMessage}${hintMessage}`);
     error.status = response.status;
     throw error;
   }
