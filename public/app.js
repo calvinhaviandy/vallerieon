@@ -26,6 +26,7 @@ let audioContext;
 let musicNodes = [];
 let fallbackTimer;
 let usingFallbackMusic = false;
+let hasConfiguredMusicUrl = false;
 
 function apiUrl(path) {
   return `${API_BASE}${path}`;
@@ -305,6 +306,13 @@ async function toggleMusic() {
   try {
     await memoryAudio.play();
   } catch (error) {
+    if (hasConfiguredMusicUrl) {
+      playerSubtitle.textContent = "URL musik tidak bisa diputar. Pakai direct MP3/M4A/OGG/WAV atau upload file musik.";
+      playButton.classList.remove("is-playing");
+      playButton.setAttribute("aria-label", "Putar musik");
+      return;
+    }
+
     startFallbackMusic();
   }
 
@@ -342,6 +350,7 @@ async function loadGallery() {
 }
 
 function renderMusicSettings(config) {
+  hasConfiguredMusicUrl = Boolean(config?.musicUrl);
   const configuredMusicUrl = config?.musicUrl || "/music/our-song.mp3";
   const configuredMusicTitle = config?.musicTitle || "";
 

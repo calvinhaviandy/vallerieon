@@ -673,6 +673,31 @@ function getExtensionFromMime(mimeType) {
   return lookup[mimeType] || "";
 }
 
+function isDirectAudioUrl(value) {
+  if (!value) {
+    return true;
+  }
+
+  if (!/^https?:\/\/.+|^\/.+/.test(value)) {
+    return false;
+  }
+
+  if (/^\/api\/blob\?path=/.test(value) || /^\/uploads\//.test(value)) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(value, "https://gallery.local");
+    const pathname = parsed.pathname.toLowerCase();
+    if (pathname === "/api/blob" && parsed.searchParams.has("path")) {
+      return true;
+    }
+    return /\.(mp3|m4a|ogg|wav)(?:$|[?#])/.test(pathname);
+  } catch {
+    return false;
+  }
+}
+
 function getPublicBaseUrl(req) {
   const configuredUrl = process.env.PUBLIC_API_URL;
   if (configuredUrl) {
@@ -996,8 +1021,10 @@ async function handleApi(req, res) {
       return;
     }
 
-    if (musicUrl && !/^https?:\/\/.+|^\/.+/.test(musicUrl)) {
-      sendJson(res, 400, { error: "URL musik harus diawali http://, https://, atau /." });
+    if (musicUrl && !isDirectAudioUrl(musicUrl)) {
+      sendJson(res, 400, {
+        error: "URL musik harus direct audio file (.mp3, .m4a, .ogg, .wav), bukan link YouTube/Spotify. Paling aman upload file musik dari panel admin."
+      });
       return;
     }
 
