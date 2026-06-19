@@ -80,7 +80,9 @@ async function request(url, options = {}) {
 
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(data.error || "Terjadi kesalahan.");
+    const error = new Error(data.error || "Terjadi kesalahan.");
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
@@ -88,6 +90,17 @@ async function request(url, options = {}) {
 function showPanel(authenticated) {
   loginCard.classList.toggle("hidden", authenticated);
   adminPanel.classList.toggle("hidden", !authenticated);
+}
+
+function handleAdminError(error, targetMessage = uploadMessage) {
+  if (error.status === 401) {
+    resetUploadForm();
+    showPanel(false);
+    loginMessage.textContent = "Session admin habis. Login ulang dulu ya.";
+    return;
+  }
+
+  targetMessage.textContent = error.message;
 }
 
 function resetUploadForm() {
@@ -176,7 +189,7 @@ async function loadAdminGallery() {
         await request(`/api/admin/media?id=${encodeURIComponent(item.id)}`, { method: "DELETE" });
         await loadAdminGallery();
       } catch (error) {
-        uploadMessage.textContent = error.message;
+        handleAdminError(error, uploadMessage);
       }
     });
 
@@ -241,7 +254,7 @@ settingsForm.addEventListener("submit", async (event) => {
     renderCurrentMusic(savedSettings);
     settingsMessage.textContent = "Setting halaman utama berhasil diperbarui.";
   } catch (error) {
-    settingsMessage.textContent = error.message;
+    handleAdminError(error, settingsMessage);
   }
 });
 
@@ -296,7 +309,7 @@ uploadForm.addEventListener("submit", async (event) => {
       : "Memori berhasil diunggah.";
     await loadAdminGallery();
   } catch (error) {
-    uploadMessage.textContent = error.message;
+    handleAdminError(error, uploadMessage);
   }
 });
 
