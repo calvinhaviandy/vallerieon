@@ -349,6 +349,49 @@ function getStorageBackend() {
   return "local";
 }
 
+function getBlobProxyUrl(storagePath) {
+  return `/api/blob?path=${encodeURIComponent(storagePath)}`;
+}
+
+function normalizeBlobMediaUrl(media) {
+  if (!USE_VERCEL_BLOB || !media?.storagePath) {
+    return media;
+  }
+
+  return {
+    ...media,
+    url: getBlobProxyUrl(media.storagePath)
+  };
+}
+
+function normalizeBlobGallery(items) {
+  if (!USE_VERCEL_BLOB) {
+    return items;
+  }
+
+  return items.map((item) => {
+    const media = Array.isArray(item.media)
+      ? item.media.map(normalizeBlobMediaUrl)
+      : item.media;
+    const normalizedItem = normalizeBlobMediaUrl(item);
+    return {
+      ...normalizedItem,
+      media
+    };
+  });
+}
+
+function normalizeBlobSettings(settings) {
+  if (!USE_VERCEL_BLOB || !settings.musicStoragePath) {
+    return settings;
+  }
+
+  return {
+    ...settings,
+    musicUrl: getBlobProxyUrl(settings.musicStoragePath)
+  };
+}
+
 async function getStorageClient() {
   if (!storageClientPromise) {
     storageClientPromise = import("@google-cloud/storage").then(({ Storage }) => {
@@ -375,17 +418,17 @@ async function getVercelBlobClient() {
 }
 
 async function readBlobJson(pathname, fallback) {
-  const { head } = await getVercelBlobClient();
+  const { get } = await getVercelBlobClient();
 
   try {
-    const blob = await head(pathname, {
+    const blob = await get(pathname, {
+      access: "private",
       token: BLOB_READ_WRITE_TOKEN
     });
-    const response = await fetch(blob.url, { cache: "no-store" });
-    if (!response.ok) {
+    if (!blob?.stream) {
       return fallback;
     }
-    const data = await response.json();
+    const data = JSON.parse(await streamToString(blob.stream));
     if (Array.isArray(fallback)) {
       return Array.isArray(data) ? data : fallback;
     }
@@ -401,12 +444,38 @@ async function readBlobJson(pathname, fallback) {
 async function writeBlobJson(pathname, payload) {
   const { put } = await getVercelBlobClient();
   await put(pathname, JSON.stringify(payload, null, 2), {
-    access: "public",
+    access: "private",
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: "application/json; charset=utf-8",
     token: BLOB_READ_WRITE_TOKEN
   });
+}
+
+async function streamToString(stream) {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let result = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    result += decoder.decode(value, { stream: true });
+  }
+
+  return result + decoder.decode();
+}
+
+async function pipeWebStreamToResponse(stream, res) {
+  const reader = stream.getReader();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    res.write(Buffer.from(value));
+  }
+
+  res.end();
 }
 
 async function runDeepHealthCheck() {
@@ -673,14 +742,14 @@ async function uploadMediaBuffer({ filename, mimeType, buffer }) {
     const { put } = await getVercelBlobClient();
     const storagePath = `${BLOB_UPLOAD_PREFIX}/${filename}`;
     const blob = await put(storagePath, buffer, {
-      access: "public",
+      access: "private",
       addRandomSuffix: false,
       contentType: mimeType,
       token: BLOB_READ_WRITE_TOKEN
     });
 
     return {
-      url: blob.url,
+      url: `/api/blob?path=${encodeURIComponent(blob.pathname || storagePath)}`,
       storagePath: blob.pathname || storagePath
     };
   }
@@ -805,14 +874,48 @@ async function handleApi(req, res) {
     return;
   }
 
+  if (req.method === "GET" && pathname === "/api/blob") {
+    if (!USE_VERCEL_BLOB) {
+      sendText(res, 404, "Not found");
+      return;
+    }
+
+    const blobPath = requestUrl.searchParams.get("path") || "";
+    if (!blobPath || blobPath.includes("..") || blobPath.startsWith("/")) {
+      sendText(res, 400, "Invalid blob path");
+      return;
+    }
+
+    const { get } = await getVercelBlobClient();
+    const blob = await get(blobPath, {
+      access: "private",
+      token: BLOB_READ_WRITE_TOKEN
+    });
+
+    if (!blob?.stream) {
+      sendText(res, 404, "Not found");
+      return;
+    }
+
+    res.writeHead(200, {
+      "Content-Type": blob.blob.contentType || "application/octet-stream",
+      "Cache-Control": "public, max-age=3600",
+      ...(blob.blob.size ? { "Content-Length": String(blob.blob.size) } : {})
+    });
+    await pipeWebStreamToResponse(blob.stream, res);
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/api/gallery") {
-    const gallery = (await readGallery()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const gallery = normalizeBlobGallery(
+      (await readGallery()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    );
     sendJson(res, 200, gallery);
     return;
   }
 
   if (req.method === "GET" && pathname === "/api/site-config") {
-    sendJson(res, 200, await readSettings());
+    sendJson(res, 200, normalizeBlobSettings(await readSettings()));
     return;
   }
 
