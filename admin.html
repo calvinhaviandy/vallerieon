@@ -7,6 +7,18 @@
     <meta name="robots" content="noindex,nofollow,noarchive" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Admin | Gallery of Us</title>
+    <style>
+      html, body { margin: 0; min-height: 100%; background: #fff8fa; }
+      .app-boot { min-height: 100svh; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 0.55rem; color: #31262a; font-family: Arial, sans-serif; }
+      .app-boot img { width: 2.75rem; height: 2.75rem; animation: boot-heart 1.4s ease-in-out infinite; }
+      .app-boot strong { font-family: Georgia, serif; font-size: 1.15rem; font-weight: 600; }
+      .app-boot small { color: #9c6c7b; font-size: 0.7rem; }
+      .app-boot-progress { position: relative; width: 4.5rem; height: 0.22rem; overflow: hidden; border: 1px solid #31262a; background: #fff; }
+      .app-boot-progress::after { position: absolute; inset: 0; width: 42%; background: #ff7f9e; content: ""; animation: boot-progress 1.1s ease-in-out infinite; }
+      @keyframes boot-heart { 0%, 100% { transform: rotate(-3deg) scale(1); } 50% { transform: rotate(3deg) scale(1.06); } }
+      @keyframes boot-progress { from { transform: translateX(-110%); } to { transform: translateX(245%); } }
+      @media (prefers-reduced-motion: reduce) { .app-boot img, .app-boot-progress::after { animation: none; } }
+    </style>
     <script>
       window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
       if (!/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)) {
@@ -18,7 +30,14 @@
     </script>
   </head>
   <body class="admin-document">
-    <div id="admin-root"><p>Masuk ke panel admin</p></div>
+    <div id="admin-root">
+      <div class="app-boot" role="status" aria-live="polite">
+        <img src="/favicon.svg" alt="" />
+        <strong>Gallery of Us</strong>
+        <span class="app-boot-progress" aria-hidden="true"></span>
+        <small>membuka arsip pribadi...</small>
+      </div>
+    </div>
     <script type="module" src="/src/admin.jsx"></script>
   </body>
 </html>

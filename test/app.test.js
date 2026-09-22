@@ -141,13 +141,13 @@ test("keeps admin files behind the shortcut cookie", async () => {
     headers: { Cookie: entryCookie }
   });
   assert.equal(protectedAdmin.status, 200);
-  assert.match(await protectedAdmin.text(), /Masuk ke panel admin/);
+  assert.match(await protectedAdmin.text(), /membuka arsip pribadi/);
 
   const protectedVercelRewrite = await fetch(`${baseUrl}/api/index?__gallery_page=admin`, {
     headers: { Cookie: entryCookie }
   });
   assert.equal(protectedVercelRewrite.status, 200);
-  assert.match(await protectedVercelRewrite.text(), /Masuk ke panel admin/);
+  assert.match(await protectedVercelRewrite.text(), /membuka arsip pribadi/);
 });
 
 test("creates an admin session and rejects unsupported music links", async () => {
