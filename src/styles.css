@@ -1475,6 +1475,99 @@ svg {
   color: #377c3c;
 }
 
+.admin-toast {
+  --toast-accent: #b9f3d0;
+  position: fixed;
+  top: 5.6rem;
+  right: 1.5rem;
+  z-index: 100;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  width: min(24rem, calc(100% - 2rem));
+  min-height: 4.4rem;
+  padding: 0.7rem;
+  border: 2px solid #31262a;
+  border-radius: 5px;
+  background: #fff;
+  color: #31262a;
+  box-shadow: 0.35rem 0.4rem 0 var(--toast-accent), 0.48rem 0.55rem 0 #31262a;
+  animation: admin-toast-enter 220ms ease-out;
+}
+
+.admin-toast-error {
+  --toast-accent: #ffc8d6;
+}
+
+.admin-toast-featured {
+  --toast-accent: #ffe58f;
+}
+
+.admin-toast-info {
+  --toast-accent: #badbff;
+}
+
+.admin-toast-icon {
+  display: grid;
+  width: 2.3rem;
+  height: 2.3rem;
+  place-items: center;
+  border: 1px solid #31262a;
+  border-radius: 4px;
+  background: var(--toast-accent);
+}
+
+.admin-toast-icon svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.admin-toast-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.14rem;
+}
+
+.admin-toast-copy strong {
+  font-size: 0.72rem;
+}
+
+.admin-toast-copy small {
+  overflow: hidden;
+  color: #806871;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+}
+
+.admin-toast > button {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #8f747d;
+  cursor: pointer;
+}
+
+.admin-toast > button:hover {
+  background: #f7edf0;
+  color: #31262a;
+}
+
+.admin-toast > button svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+@keyframes admin-toast-enter {
+  from { opacity: 0; transform: translateY(-0.65rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .admin-dark-button,
 .admin-primary-button {
   display: inline-flex;
@@ -2220,6 +2313,12 @@ svg {
   .admin-header {
     height: 4.2rem;
     padding: 0 0.8rem;
+  }
+
+  .admin-toast {
+    top: 4.8rem;
+    right: 0.75rem;
+    width: calc(100% - 1.5rem);
   }
 
   .admin-header-actions span {

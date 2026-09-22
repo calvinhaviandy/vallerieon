@@ -1012,6 +1012,19 @@ async function uploadMediaBuffer({ filename, mimeType, buffer }) {
 async function deleteMediaAsset(item) {
   const mediaItems = getEntryMedia(item);
 
+  if (USE_VERCEL_BLOB) {
+    const targets = [...new Set(
+      mediaItems
+        .map((media) => media.storagePath || media.url)
+        .filter(Boolean)
+    )];
+    if (targets.length) {
+      const { del } = await getVercelBlobClient();
+      await del(targets, { token: BLOB_READ_WRITE_TOKEN });
+    }
+    return;
+  }
+
   if (mediaItems.length > 1) {
     await Promise.all(mediaItems.map((media) => deleteSingleMediaAsset(media)));
     return;
@@ -1559,7 +1572,9 @@ async function handleApi(req, res, options = {}) {
 
     const nextItems = items.filter((item) => item.id !== id);
     await writeGallery(nextItems);
-    await deleteMediaAsset(target);
+    await deleteMediaAsset(target).catch((error) => {
+      console.error(`Media cleanup failed for ${id}:`, error.message);
+    });
     sendJson(res, 200, { success: true });
     return;
   }

@@ -56,6 +56,36 @@ function BusyLabel({ busy, busyText, children }) {
   return busy ? <><LoaderCircle className="animate-spin" />{busyText}</> : children;
 }
 
+function AdminToast({ toast, onDismiss }) {
+  useEffect(() => {
+    if (!toast || toast.type === "info") return undefined;
+    const timer = window.setTimeout(onDismiss, 4500);
+    return () => window.clearTimeout(timer);
+  }, [toast, onDismiss]);
+
+  if (!toast) return null;
+
+  const ToastIcon = toast.type === "error"
+    ? CircleAlert
+    : toast.type === "featured"
+      ? Sparkles
+      : toast.type === "info"
+        ? LoaderCircle
+        : Check;
+
+  return (
+    <aside
+      className={`admin-toast admin-toast-${toast.type || "success"}`}
+      role={toast.type === "error" ? "alert" : "status"}
+      aria-live={toast.type === "error" ? "assertive" : "polite"}
+    >
+      <span className="admin-toast-icon"><ToastIcon className={toast.type === "info" ? "animate-spin" : ""} /></span>
+      <span className="admin-toast-copy"><strong>{toast.title}</strong><small>{toast.text}</small></span>
+      <button type="button" onClick={onDismiss} aria-label="Tutup notifikasi" title="Tutup notifikasi"><X /></button>
+    </aside>
+  );
+}
+
 function SpotifyArtwork({ track, className = "spotify-art" }) {
   if (!track?.imageUrl) {
     return <span className={`${className} spotify-art-fallback`}><Music2 /></span>;
@@ -374,7 +404,7 @@ function MusicPanel({ settings, onSaved, onUnauthorized, notify }) {
   );
 }
 
-function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, notify, panelRef }) {
+function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, notify, announce, panelRef }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [featured, setFeatured] = useState(false);
@@ -429,20 +459,35 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
         files: mediaFiles
       });
 
-      if (editingItem) {
-        await request(`/api/admin/media?id=${encodeURIComponent(editingItem.id)}`, { method: "PUT", body: payload });
-      } else {
-        await request("/api/admin/upload", { method: "POST", body: payload });
-      }
-      const successText = editingItem ? "Memori berhasil diperbarui." : "Memori berhasil ditambahkan.";
+      const wasEditing = Boolean(editingItem);
+      const saved = editingItem
+        ? await request(`/api/admin/media?id=${encodeURIComponent(editingItem.id)}`, { method: "PUT", body: payload })
+        : await request("/api/admin/upload", { method: "POST", body: payload });
+      const isFeatured = Boolean(saved.featured);
+      const successText = isFeatured
+        ? wasEditing
+          ? `“${saved.title}” diperbarui dan tampil sebagai featured.`
+          : `“${saved.title}” ditambahkan sebagai featured.`
+        : wasEditing
+          ? `“${saved.title}” berhasil diperbarui.`
+          : `“${saved.title}” berhasil ditambahkan.`;
+
+      onSaved(saved);
       reset();
       onCancelEdit();
-      await onSaved();
       notify("gallery");
       setMessage({ text: successText, type: "success" });
+      announce({
+        type: isFeatured ? "featured" : "success",
+        title: isFeatured ? "Featured aktif" : wasEditing ? "Perubahan tersimpan" : "Memori ditambahkan",
+        text: successText
+      });
     } catch (error) {
       if (error.status === 401) onUnauthorized();
-      else setMessage({ text: error.message, type: "error" });
+      else {
+        setMessage({ text: error.message, type: "error" });
+        announce({ type: "error", title: "Gagal menyimpan", text: error.message });
+      }
     } finally {
       setBusy(false);
     }
@@ -500,21 +545,33 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
   );
 }
 
-function MemoryLibrary({ items, onEdit, onDeleted, onUnauthorized, notify }) {
+function MemoryLibrary({ items, onEdit, onDeleteStarted, onDeleteFailed, onUnauthorized, notify, announce }) {
   const [deletingId, setDeletingId] = useState("");
   const [message, setMessage] = useState(null);
 
   async function remove(item) {
     if (!window.confirm(`Hapus “${item.title}” beserta semua medianya?`)) return;
     setDeletingId(item.id);
+    onDeleteStarted(item.id);
+    setMessage({ text: `Menghapus “${item.title}”...`, type: "info" });
+    announce({
+      type: "info",
+      title: "Menghapus memori",
+      text: `“${item.title}” langsung disembunyikan sambil file dibersihkan.`
+    });
     try {
       await request(`/api/admin/media?id=${encodeURIComponent(item.id)}`, { method: "DELETE" });
-      await onDeleted();
       notify("gallery");
-      setMessage({ text: `“${item.title}” berhasil dihapus.`, type: "success" });
+      const successText = `“${item.title}” berhasil dihapus.`;
+      setMessage({ text: successText, type: "success" });
+      announce({ type: "success", title: "Memori dihapus", text: successText });
     } catch (error) {
       if (error.status === 401) onUnauthorized();
-      else setMessage({ text: error.message, type: "error" });
+      else {
+        await onDeleteFailed().catch(() => {});
+        setMessage({ text: error.message, type: "error" });
+        announce({ type: "error", title: "Gagal menghapus", text: error.message });
+      }
     } finally {
       setDeletingId("");
     }
@@ -605,11 +662,34 @@ export function AdminApp() {
   const [settings, setSettings] = useState({});
   const [editingItem, setEditingItem] = useState(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [toast, setToast] = useState(null);
   const editorRef = useRef(null);
   const syncChannel = useRef(null);
 
   const notify = useCallback((type) => {
     syncChannel.current?.postMessage({ type, updatedAt: Date.now() });
+  }, []);
+
+  const announce = useCallback((nextToast) => {
+    setToast({ ...nextToast, id: `${Date.now()}-${Math.random()}` });
+  }, []);
+
+  const dismissToast = useCallback(() => setToast(null), []);
+
+  const handleMemorySaved = useCallback((saved) => {
+    setGallery((current) => {
+      const normalized = saved.featured
+        ? current.map((item) => item.id === saved.id ? item : { ...item, featured: false })
+        : current;
+      const existingIndex = normalized.findIndex((item) => item.id === saved.id);
+      if (existingIndex < 0) return [saved, ...normalized];
+      return normalized.map((item) => item.id === saved.id ? saved : item);
+    });
+  }, []);
+
+  const handleDeleteStarted = useCallback((id) => {
+    setGallery((current) => current.filter((item) => item.id !== id));
+    setEditingItem((current) => current?.id === id ? null : current);
   }, []);
 
   const loadWorkspace = useCallback(async () => {
@@ -624,6 +704,7 @@ export function AdminApp() {
   const handleUnauthorized = useCallback(() => {
     setAuthenticated(false);
     setEditingItem(null);
+    setToast(null);
   }, []);
 
   const enterWorkspace = useCallback(async () => {
@@ -670,6 +751,7 @@ export function AdminApp() {
 
   return (
     <div className="admin-app">
+      <AdminToast toast={toast} onDismiss={dismissToast} />
       <AdminHeader onLogout={logout} loggingOut={loggingOut} />
       <div className="admin-frame">
         <AdminSidebar />
@@ -697,9 +779,10 @@ export function AdminApp() {
             <MemoryEditor
               editingItem={editingItem}
               onCancelEdit={() => setEditingItem(null)}
-              onSaved={loadWorkspace}
+              onSaved={handleMemorySaved}
               onUnauthorized={handleUnauthorized}
               notify={notify}
+              announce={announce}
               panelRef={editorRef}
             />
           </div>
@@ -707,9 +790,11 @@ export function AdminApp() {
           <MemoryLibrary
             items={gallery}
             onEdit={setEditingItem}
-            onDeleted={loadWorkspace}
+            onDeleteStarted={handleDeleteStarted}
+            onDeleteFailed={loadWorkspace}
             onUnauthorized={handleUnauthorized}
             notify={notify}
+            announce={announce}
           />
         </main>
       </div>
