@@ -83,6 +83,7 @@ svg {
   position: absolute;
   width: 1.25rem;
   height: 1.25rem;
+  border: 2px solid #31262a;
   border-radius: 3px;
   transform: rotate(45deg);
 }
@@ -90,14 +91,13 @@ svg {
 .brand-mark span:first-child {
   top: 0;
   left: 0;
-  background: #f15b6c;
+  background: #ff6f91;
 }
 
 .brand-mark span:last-child {
   right: 0;
   bottom: 0;
-  background: #b7ea7a;
-  mix-blend-mode: screen;
+  background: #b9f3d0;
 }
 
 .brand-copy {
@@ -1812,25 +1812,41 @@ svg {
 .login-view {
   position: relative;
   display: grid;
+  overflow: hidden;
   min-height: 100svh;
   place-items: center;
   padding: 2rem;
-  background: #efeee8;
-  color: #171814;
+  background: #fff8fa;
+  color: #31262a;
 }
 
 .login-view::before {
   position: fixed;
-  top: 0;
-  bottom: 0;
+  top: 14%;
   left: 0;
-  width: 0.55rem;
-  background: #f15b6c;
+  width: 6rem;
+  height: 13rem;
+  border: 1px solid #8ab7e5;
+  border-left: 0;
+  background: #badbff;
+  content: "";
+}
+
+.login-view::after {
+  position: fixed;
+  right: 0;
+  bottom: 12%;
+  width: 5rem;
+  height: 8rem;
+  border: 1px solid #8cd9ad;
+  border-right: 0;
+  background: #b9f3d0;
   content: "";
 }
 
 .admin-back-link {
   position: absolute;
+  z-index: 2;
   top: 1.5rem;
   left: 1.8rem;
   display: inline-flex;
@@ -1847,32 +1863,87 @@ svg {
 }
 
 .login-panel {
-  width: min(27rem, 100%);
-  padding: 1.5rem;
-  border: 1px solid #cdcbc3;
-  border-radius: 8px;
-  background: #faf9f5;
-  box-shadow: 0 1.5rem 4rem rgba(40, 41, 35, 0.12);
+  position: relative;
+  z-index: 1;
+  width: min(31rem, 100%);
+  padding: 1.8rem 2rem 1.5rem;
+  border: 2px solid #31262a;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0.7rem 0.75rem 0 #ffc8d6, 0.9rem 0.95rem 0 #31262a;
+}
+
+.login-panel::before,
+.login-panel::after {
+  position: absolute;
+  top: -0.72rem;
+  width: 4rem;
+  height: 1.2rem;
+  border: 1px solid rgba(49, 38, 42, 0.18);
+  background: rgba(255, 229, 143, 0.9);
+  content: "";
+}
+
+.login-panel::before {
+  left: 2.5rem;
+  transform: rotate(-7deg);
+}
+
+.login-panel::after {
+  right: 2.5rem;
+  transform: rotate(7deg);
+}
+
+.login-panel-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.login-private-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #d8486d;
+  font-size: 0.58rem;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.login-private-label svg {
+  width: 0.78rem;
+  height: 0.78rem;
+}
+
+.login-hero {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  margin: 2rem 0 0.7rem;
 }
 
 .login-lock {
   display: grid;
-  width: 3.1rem;
-  height: 3.1rem;
-  margin-top: 2.5rem;
+  flex: 0 0 auto;
+  width: 3rem;
+  height: 3rem;
   place-items: center;
-  border-radius: 50%;
-  background: #191a17;
-  color: #b7ea7a;
+  border: 2px solid #31262a;
+  border-radius: 5px;
+  background: #ffe58f;
+  color: #31262a;
+  box-shadow: 3px 3px 0 #31262a;
+  transform: rotate(-5deg);
 }
 
 .login-heading {
-  margin: 1.2rem 0 1.5rem;
+  min-width: 0;
 }
 
 .login-heading p {
   margin: 0 0 0.3rem;
-  color: #e34e60;
+  color: #d8486d;
   font-size: 0.62rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -1883,15 +1954,45 @@ svg {
   font-family: var(--font-display);
   font-size: 2rem;
   font-weight: 500;
+  line-height: 1.05;
+}
+
+.login-subtitle {
+  margin: 0 0 1.5rem 4rem;
+  color: #8f747d;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.login-panel .field-with-action {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .login-submit {
   width: 100%;
-  margin-top: 0.8rem;
+  margin-top: 0.9rem;
+  background: #ff6f91;
+  color: #31262a;
 }
 
 .login-panel .admin-message {
   margin-top: 0.75rem;
+}
+
+.login-private-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin: 1rem 0 0;
+  color: #9b7e88;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+}
+
+.login-private-note svg {
+  width: 0.72rem;
+  height: 0.72rem;
 }
 
 .login-edition {
@@ -2204,6 +2305,11 @@ svg {
     padding: 5rem 1rem 2rem;
   }
 
+  .login-view::before,
+  .login-view::after {
+    display: none;
+  }
+
   .admin-back-link {
     top: 1.3rem;
     left: 1rem;
@@ -2211,6 +2317,28 @@ svg {
 
   .login-edition {
     display: none;
+  }
+
+  .login-panel {
+    padding: 1.5rem 1.25rem 1.25rem;
+    box-shadow: 0.45rem 0.5rem 0 #ffc8d6, 0.6rem 0.65rem 0 #31262a;
+  }
+
+  .login-private-label {
+    display: none;
+  }
+
+  .login-hero {
+    align-items: center;
+    margin-top: 1.7rem;
+  }
+
+  .login-heading h1 {
+    font-size: 1.7rem;
+  }
+
+  .login-subtitle {
+    margin-left: 0;
   }
 }
 

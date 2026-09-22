@@ -94,12 +94,18 @@ function LoginView({ onLogin }) {
         <ArrowLeft /> <span>Kembali</span>
       </a>
       <section className="login-panel">
-        <Logo />
-        <div className="login-lock"><LockKeyhole /></div>
-        <div className="login-heading">
-          <p>Private access</p>
-          <h1>Masuk ke panel admin</h1>
+        <div className="login-panel-top">
+          <Logo />
+          <span className="login-private-label"><Sparkles /> Private access</span>
         </div>
+        <div className="login-hero">
+          <div className="login-lock"><LockKeyhole /></div>
+          <div className="login-heading">
+            <p>Selamat datang kembali</p>
+            <h1>Masuk ke panel admin</h1>
+          </div>
+        </div>
+        <p className="login-subtitle">Ruang kecil untuk semua hal yang ingin kita simpan.</p>
         <form onSubmit={submit}>
           <label className="field-label" htmlFor="admin-password">Password</label>
           <div className="field-with-action">
@@ -122,6 +128,7 @@ function LoginView({ onLogin }) {
           </button>
           <Message message={message} />
         </form>
+        <p className="login-private-note"><LockKeyhole /> Hanya untuk kita</p>
       </section>
       <span className="login-edition">Gallery control room / 2026</span>
     </main>
