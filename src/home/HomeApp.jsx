@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Heart,
   Images,
+  Play,
   RefreshCw,
   Sparkles
 } from "lucide-react";
@@ -53,9 +54,15 @@ function MemoryStage({ items, activeIndex, direction, move }) {
     >
       {items.length > 1 && (
         <button className="carousel-peek carousel-peek-left" type="button" onClick={() => move(-1)} aria-label="Memori sebelumnya" title="Memori sebelumnya">
-          <small>previous</small>
-          <strong>{previous.entry.title}</strong>
-          <span aria-hidden="true"><Heart fill="currentColor" /></span>
+          <span className="carousel-peek-visual" aria-hidden="true">
+            <MediaAsset media={previous.media} title={previous.entry.title} className="carousel-peek-media" preloadVideo />
+            {previous.media?.type === "video" && <span className="carousel-peek-video"><Play fill="currentColor" /></span>}
+          </span>
+          <span className="carousel-peek-caption">
+            <small>previous</small>
+            <strong>{previous.entry.title}</strong>
+          </span>
+          <span className="carousel-peek-icon" aria-hidden="true"><Heart fill="currentColor" /></span>
         </button>
       )}
 
@@ -85,9 +92,15 @@ function MemoryStage({ items, activeIndex, direction, move }) {
 
       {items.length > 1 && (
         <button className="carousel-peek carousel-peek-right" type="button" onClick={() => move(1)} aria-label="Memori berikutnya" title="Memori berikutnya">
-          <small>next</small>
-          <strong>{next.entry.title}</strong>
-          <span aria-hidden="true"><Sparkles /></span>
+          <span className="carousel-peek-visual" aria-hidden="true">
+            <MediaAsset media={next.media} title={next.entry.title} className="carousel-peek-media" preloadVideo />
+            {next.media?.type === "video" && <span className="carousel-peek-video"><Play fill="currentColor" /></span>}
+          </span>
+          <span className="carousel-peek-caption">
+            <small>next</small>
+            <strong>{next.entry.title}</strong>
+          </span>
+          <span className="carousel-peek-icon" aria-hidden="true"><Sparkles /></span>
         </button>
       )}
     </div>

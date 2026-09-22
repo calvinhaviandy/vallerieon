@@ -370,12 +370,12 @@ svg {
 
 .carousel-peek {
   position: relative;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  min-height: 10rem;
-  align-content: end;
-  gap: 0.35rem;
-  padding: 1rem 1rem 1.2rem;
+  min-height: 13.5rem;
+  gap: 0;
+  padding: 0.48rem 0.48rem 1rem;
   border: 2px solid #31262a;
   border-radius: 5px;
   background: #fff;
@@ -401,6 +401,56 @@ svg {
   transform: rotate(0deg) translateY(-0.25rem);
 }
 
+.carousel-peek-visual {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border: 1px solid #d9c8ce;
+  border-radius: 3px;
+  background: #f4e9ed;
+}
+
+.carousel-peek-media {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 240ms ease;
+}
+
+.carousel-peek:hover .carousel-peek-media {
+  transform: scale(1.035);
+}
+
+.carousel-peek-video {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  border: 1px solid rgba(49, 38, 42, 0.85);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.88);
+  color: #d8486d;
+  box-shadow: 2px 2px 0 rgba(49, 38, 42, 0.8);
+  transform: translate(-50%, -50%);
+}
+
+.carousel-peek-video svg {
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-left: 0.08rem;
+}
+
+.carousel-peek-caption {
+  display: grid;
+  gap: 0.32rem;
+  padding: 0.72rem 0.48rem 0.08rem;
+}
+
 .carousel-peek small {
   color: #d8486d;
   font-size: 0.54rem;
@@ -419,14 +469,14 @@ svg {
   -webkit-line-clamp: 3;
 }
 
-.carousel-peek > span {
+.carousel-peek-icon {
   position: absolute;
   right: 0.55rem;
   bottom: 0.38rem;
   color: #ff6f91;
 }
 
-.carousel-peek > span svg {
+.carousel-peek-icon svg {
   width: 0.8rem;
   height: 0.8rem;
 }

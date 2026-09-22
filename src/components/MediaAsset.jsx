@@ -8,7 +8,8 @@ export function MediaAsset({
   className = "",
   videoControls = false,
   eager = false,
-  autoPlayVideo = false
+  autoPlayVideo = false,
+  preloadVideo = false
 }) {
   const [failed, setFailed] = useState(false);
   const source = getMediaSource(media);
@@ -32,7 +33,7 @@ export function MediaAsset({
         loop={autoPlayVideo && !videoControls}
         autoPlay={autoPlayVideo && !videoControls}
         playsInline
-        preload={autoPlayVideo || videoControls ? "metadata" : "none"}
+        preload={autoPlayVideo || videoControls || preloadVideo ? "metadata" : "none"}
         onError={() => setFailed(true)}
       />
     );
