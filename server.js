@@ -1,4 +1,14 @@
 const http = require("http");
+const path = require("path");
+
+if (typeof process.loadEnvFile === "function") {
+  try {
+    process.loadEnvFile(path.join(__dirname, ".env.local"));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+}
+
 const { createRequestHandler } = require("./app-handler");
 
 const PORT = process.env.PORT || 3000;

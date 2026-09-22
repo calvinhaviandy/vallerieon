@@ -1,8 +1,19 @@
 {
   "heartSlots": 41,
   "anniversaryDate": "",
+  "musicSource": "spotify",
   "musicTitle": "Our favorite song",
   "musicUrl": "",
   "musicFilename": "",
-  "musicStoragePath": ""
+  "musicStoragePath": "",
+  "spotifyTrack": {
+    "id": "0XYALktGbnHJ1TdW0Oz5KN",
+    "uri": "spotify:track:0XYALktGbnHJ1TdW0Oz5KN",
+    "url": "https://open.spotify.com/track/0XYALktGbnHJ1TdW0Oz5KN",
+    "name": "Merry Christmas, i miss you",
+    "artist": "Alex Crichton",
+    "album": "Merry Christmas, i miss you",
+    "imageUrl": "https://i.scdn.co/image/ab67616d0000b2734df358d2889ec24b2df23c67",
+    "durationMs": 246857
+  }
 }

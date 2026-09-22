@@ -5,3 +5,4 @@ public/uploads/*
 !public/uploads/seed-heart.svg
 
 .vercel
+public/assets/

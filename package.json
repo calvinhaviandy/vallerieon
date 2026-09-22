@@ -4,13 +4,27 @@
   "description": "Cute and modern memory gallery for couples with admin uploads.",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "build": "vite build",
+    "dev": "npm run build && node server.js",
+    "prestart": "npm run build",
+    "start": "node server.js",
+    "pretest": "npm run build",
+    "test": "node --test"
   },
   "dependencies": {
-    "@google-cloud/firestore": "^7.0.0",
-    "@google-cloud/storage": "^7.0.0",
+    "@google-cloud/firestore": "^9.2.0",
+    "@google-cloud/storage": "^8.2.0",
     "@vercel/analytics": "^2.0.1",
-    "@vercel/blob": "^2.4.1"
+    "@vercel/blob": "^2.4.1",
+    "lucide-react": "^1.47.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@vitejs/plugin-react": "^6.1.1",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.0"
+  }
 }

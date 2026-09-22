@@ -1,102 +1,100 @@
 # Gallery of Us
 
-Website galeri kenangan untuk pasangan, dengan tampilan lucu, modern, minimalis, admin panel, dan upload foto/video.
+Arsip kenangan pribadi berbasis React dengan carousel foto/video, soundtrack Spotify atau audio sendiri, dan panel admin terlindungi.
+
+## Stack
+
+- React 19 untuk halaman publik dan panel admin
+- Vite untuk build production
+- Tailwind CSS 4 sebagai fondasi visual system
+- Animasi CSS ringan untuk transisi carousel dan antarmuka
+- Lucide React untuk ikon
+- Node.js API tanpa framework di `app-handler.js`
+- Vercel Blob atau Google Cloud untuk media dan metadata
 
 ## Fitur
 
-- Halaman publik untuk menampilkan semua memori
-- Carousel memori dengan player musik
-- Shortcut admin dari halaman utama
-- Admin panel login sederhana
-- Upload, edit, dan hapus foto/video dari browser
-- Upload musik untuk player dari admin
-- Penyimpanan online dengan Vercel Blob saat deploy ke Vercel
-- Fallback penyimpanan lokal untuk development
+- Carousel memori responsif dengan gesture, keyboard, dan animasi
+- Beberapa foto/video dalam satu memori
+- Spotify search di admin dan Spotify Embed di halaman utama
+- Player audio untuk file upload atau direct audio URL
+- Upload, edit, featured memory, dan hapus memori
+- Kompresi gambar di browser sebelum upload
+- Sinkronisasi langsung antara tab admin dan halaman publik
+- Admin hanya dapat dibuka melalui shortcut dan cookie entry sementara
+- Spotify Embed dimuat hanya setelah tombol play ditekan
 
-## Cara menjalankan lokal
+## Development
 
-1. Install dependency:
+Install dependency dan jalankan aplikasi:
 
 ```bash
 npm install
-```
-
-2. Jalankan server:
-
-```bash
 npm start
 ```
 
-3. Buka:
+`npm start` otomatis menjalankan build Vite lalu membuka server di:
 
 ```text
 http://localhost:3000
 ```
 
-Admin panel lokal dibuka dari halaman utama dengan shortcut:
+Panel admin dibuka dari halaman utama dengan `Ctrl + R`. Password lokal default adalah `galleryofus`; gunakan `ADMIN_PASSWORD` untuk menggantinya.
 
-```text
-Ctrl + R
+Perintah lain:
+
+```bash
+npm run build
+npm test
 ```
 
-Password default lokal:
+## Environment
 
 ```text
-galleryofus
-```
-
-## Deploy Vercel + Vercel Blob
-
-Frontend dan API sama-sama jalan di Vercel. Foto, video, musik, data galeri, dan setting halaman utama disimpan di Vercel Blob.
-
-### 1. Vercel Blob
-
-Buat Blob store di Vercel, lalu isi environment variable project:
-
-```text
-BLOB_STORE_ID=store-id-kamu
-BLOB_READ_WRITE_TOKEN=token-blob-kamu
 ADMIN_PASSWORD=password-admin-kamu
 ADMIN_SESSION_SECRET=random-secret-yang-panjang
+SPOTIFY_CLIENT_ID=client-id-aplikasi-spotify
+SPOTIFY_CLIENT_SECRET=client-secret-aplikasi-spotify
+BLOB_STORE_ID=store-id-kamu
+BLOB_READ_WRITE_TOKEN=token-blob-kamu
 ```
 
-Jangan commit token Blob ke repository. Simpan hanya di Vercel Project Settings.
+Client Secret Spotify dan token Blob hanya digunakan server. Jangan commit nilai rahasia ke repository.
 
-Kalau Blob masih kosong, app akan memakai data awal dari `data/gallery.json` dan `data/settings.json`. Setelah upload/edit dari admin, data akan tersimpan ke Vercel Blob.
-
-### 2. Environment variable opsional
+Environment opsional:
 
 ```text
-FRONTEND_ORIGIN=https://domain-vercel-kamu.vercel.app
+FRONTEND_ORIGIN=https://domain-kamu.com
 BLOB_DATA_PREFIX=data
 BLOB_UPLOAD_PREFIX=uploads
 DISABLE_LOCAL_SEED=true
 ```
 
-### 3. Config frontend
+## Batas Upload
 
-Untuk Vercel full app, `public/config.js` cukup seperti ini:
+- Maksimal 12 file per memori
+- Maksimal total 3 MB dari browser setelah kompresi
+- Gambar besar dikecilkan dan dikonversi ke WebP otomatis sebelum upload
+- Audio upload maksimal 3 MB
+- Audio URL harus berupa file `.mp3`, `.m4a`, `.ogg`, atau `.wav`
 
-```js
-window.GALLERY_API_BASE = "";
-```
+## Struktur
 
-Artinya frontend akan memanggil API dari domain Vercel yang sama, misalnya:
+- `index.html` entry Vite halaman publik
+- `admin.html` entry Vite panel admin
+- `src/home/` komponen carousel dan music player
+- `src/admin/` komponen dashboard admin
+- `src/components/` komponen bersama
+- `src/lib/` client API dan utilitas media
+- `src/styles.css` Tailwind dan visual system
+- `vite.config.mjs` build multi-page dan pemindahan admin ke area terlindungi
+- `app-handler.js` API, autentikasi, Spotify, dan storage
+- `public/` hasil build dan upload lokal
+- `protected/admin.html` hasil build admin yang dilayani setelah shortcut
+- `data/` seed dan fallback development
 
-```text
-https://domain-kamu.vercel.app/api/gallery
-```
+## Deploy Vercel
 
-## Struktur utama
+`vercel.json` menjalankan `npm run build`. Halaman publik ditempatkan di `public/`, sedangkan HTML admin dipindahkan ke `protected/` dan tetap melalui pemeriksaan cookie oleh server.
 
-- `server.js` server lokal
-- `app-handler.js` handler API bersama untuk lokal dan Vercel
-- `api/index.js` entrypoint Vercel serverless API
-- `public/index.html` halaman publik
-- `protected/admin.html` panel admin
-- `protected/admin.js` logika admin
-- `public/styles.css` styling utama
-- `public/app.js` logika galeri publik
-- `data/gallery.json` metadata lokal
-- `data/settings.json` setting lokal
-- `public/uploads/` upload lokal
+Set semua environment production di Vercel Project Settings, lalu deploy. Jika Blob masih kosong, aplikasi memakai seed dari `data/gallery.json` dan `data/settings.json` sampai perubahan pertama disimpan dari admin.

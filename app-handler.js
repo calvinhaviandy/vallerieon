@@ -7,6 +7,12 @@ const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || ADMIN_PASSWORD;
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
 const BLOB_STORE_ID = normalizeEnvValue(process.env.BLOB_STORE_ID);
 const BLOB_READ_WRITE_TOKEN = normalizeEnvValue(process.env.BLOB_READ_WRITE_TOKEN);
+const SPOTIFY_CLIENT_ID = normalizeEnvValue(process.env.SPOTIFY_CLIENT_ID);
+const SPOTIFY_CLIENT_SECRET = normalizeEnvValue(process.env.SPOTIFY_CLIENT_SECRET);
+const SPOTIFY_CONFIG_STATUS = {
+  clientId: Boolean(SPOTIFY_CLIENT_ID),
+  clientSecret: Boolean(SPOTIFY_CLIENT_SECRET)
+};
 const GOOGLE_CONFIG_STATUS = {
   bucket: Boolean(process.env.GCS_BUCKET_NAME),
   projectId: Boolean(process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT),
@@ -57,15 +63,39 @@ const BLOB_SETTINGS_PATH = `${BLOB_DATA_PREFIX}/settings.json`;
 const DEFAULT_SETTINGS = {
   heartSlots: 41,
   anniversaryDate: "",
+  musicSource: "none",
   musicTitle: "Our favorite song",
   musicUrl: "",
   musicFilename: "",
-  musicStoragePath: ""
+  musicStoragePath: "",
+  spotifyTrack: null
 };
+const MAX_FILES_PER_MEMORY = 12;
+const MAX_DECODED_UPLOAD_BYTES = 4 * 1024 * 1024;
+const ALLOWED_MEDIA_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/svg+xml",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime"
+]);
+const ALLOWED_AUDIO_MIME_TYPES = new Set([
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/ogg",
+  "audio/wav",
+  "audio/x-wav"
+]);
 
 let storageClientPromise;
 let firestoreClientPromise;
 let vercelBlobClientPromise;
+let spotifyAccessToken = "";
+let spotifyAccessTokenExpiresAt = 0;
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -225,6 +255,13 @@ function signSession(payload) {
   return crypto.createHmac("sha256", SESSION_SECRET).update(payload).digest("hex");
 }
 
+function signaturesMatch(received, expected) {
+  const receivedBuffer = Buffer.from(received || "");
+  const expectedBuffer = Buffer.from(expected || "");
+  return receivedBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(receivedBuffer, expectedBuffer);
+}
+
 function createSessionToken() {
   const payload = toBase64Url(
     JSON.stringify({
@@ -250,7 +287,7 @@ function verifySessionToken(token) {
   }
 
   const [payload, signature] = token.split(".");
-  if (signature !== signSession(payload)) {
+  if (!signaturesMatch(signature, signSession(payload))) {
     return false;
   }
 
@@ -268,7 +305,7 @@ function verifyAdminEntryToken(token) {
   }
 
   const [payload, signature] = token.split(".");
-  if (signature !== signSession(payload)) {
+  if (!signaturesMatch(signature, signSession(payload))) {
     return false;
   }
 
@@ -381,14 +418,81 @@ function normalizeBlobGallery(items) {
   });
 }
 
-function normalizeBlobSettings(settings) {
-  if (!USE_VERCEL_BLOB || !settings.musicStoragePath) {
-    return settings;
+function normalizeSpotifyTrack(track) {
+  if (!track || typeof track !== "object") {
+    return null;
+  }
+
+  const id = String(track.id || "").trim();
+  const name = String(track.name || track.title || "").trim().slice(0, 160);
+  const artist = Array.isArray(track.artists)
+    ? track.artists
+        .map((entry) => String(entry?.name || entry || "").trim())
+        .filter(Boolean)
+        .join(", ")
+        .slice(0, 200)
+    : String(track.artist || "").trim().slice(0, 200);
+  const album = String(track.album?.name || track.album || "").trim().slice(0, 160);
+  const rawImageUrl = String(
+    track.imageUrl || (Array.isArray(track.album?.images) ? track.album.images[0]?.url : "") || ""
+  ).trim();
+  const imageUrl = /^https:\/\//i.test(rawImageUrl) ? rawImageUrl : "";
+  const durationMs = Number(track.durationMs ?? track.duration_ms);
+
+  if (!/^[A-Za-z0-9]{22}$/.test(id) || !name || !artist) {
+    return null;
   }
 
   return {
-    ...settings,
-    musicUrl: getBlobProxyUrl(settings.musicStoragePath)
+    id,
+    uri: `spotify:track:${id}`,
+    url: `https://open.spotify.com/track/${id}`,
+    name,
+    artist,
+    album,
+    imageUrl,
+    durationMs: Number.isFinite(durationMs) && durationMs > 0
+      ? Math.min(Math.round(durationMs), 24 * 60 * 60 * 1000)
+      : 0
+  };
+}
+
+function normalizeMusicSettings(settings) {
+  const normalized = {
+    ...DEFAULT_SETTINGS,
+    ...(settings && typeof settings === "object" ? settings : {})
+  };
+  const spotifyTrack = normalizeSpotifyTrack(normalized.spotifyTrack);
+  const musicUrl = String(normalized.musicUrl || "").trim();
+  let musicSource = "none";
+
+  if (normalized.musicSource === "spotify" && spotifyTrack) {
+    musicSource = "spotify";
+  } else if (normalized.musicSource === "audio" && musicUrl) {
+    musicSource = "audio";
+  } else if (spotifyTrack && !musicUrl) {
+    musicSource = "spotify";
+  } else if (musicUrl) {
+    musicSource = "audio";
+  }
+
+  return {
+    ...normalized,
+    musicSource,
+    musicUrl,
+    spotifyTrack
+  };
+}
+
+function normalizeBlobSettings(settings) {
+  const normalized = normalizeMusicSettings(settings);
+  if (!USE_VERCEL_BLOB || !normalized.musicStoragePath) {
+    return normalized;
+  }
+
+  return {
+    ...normalized,
+    musicUrl: getBlobProxyUrl(normalized.musicStoragePath)
   };
 }
 
@@ -664,13 +768,42 @@ function getExtensionFromMime(mimeType) {
     "audio/mpeg": ".mp3",
     "audio/mp3": ".mp3",
     "audio/mp4": ".m4a",
+    "audio/x-m4a": ".m4a",
     "audio/ogg": ".ogg",
     "audio/wav": ".wav",
+    "audio/x-wav": ".wav",
     "video/mp4": ".mp4",
     "video/webm": ".webm",
     "video/quicktime": ".mov"
   };
   return lookup[mimeType] || "";
+}
+
+function decodeUploadFile(file, allowedMimeTypes, label) {
+  const base64Match = file?.fileData?.match(/^data:([^;]+);base64,(.+)$/);
+  if (!base64Match) {
+    throw new Error(`Format ${label} tidak valid.`);
+  }
+
+  const mimeType = file.mimeType || base64Match[1];
+  if (!allowedMimeTypes.has(mimeType)) {
+    throw new Error(`Format ${label} belum didukung.`);
+  }
+
+  const ext = getExtensionFromMime(mimeType);
+  if (!ext) {
+    throw new Error(`Ekstensi ${label} tidak dikenali.`);
+  }
+
+  const buffer = Buffer.from(base64Match[2], "base64");
+  if (!buffer.length) {
+    throw new Error(`${label} kosong.`);
+  }
+  if (buffer.length > MAX_DECODED_UPLOAD_BYTES) {
+    throw new Error(`${label} terlalu besar. Maksimal 4 MB per file.`);
+  }
+
+  return { mimeType, ext, buffer };
 }
 
 function isDirectAudioUrl(value) {
@@ -698,18 +831,78 @@ function isDirectAudioUrl(value) {
   }
 }
 
-function getPublicBaseUrl(req) {
-  const configuredUrl = process.env.PUBLIC_API_URL;
-  if (configuredUrl) {
-    const normalized = configuredUrl.startsWith("http")
-      ? configuredUrl
-      : `https://${configuredUrl}`;
-    return normalized.replace(/\/$/, "");
+async function readJsonResponse(response) {
+  const raw = await response.text();
+  if (!raw) return {};
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function createSpotifyError(response, payload) {
+  const message = payload?.error?.message || payload?.error_description || "Spotify API tidak merespons dengan benar.";
+  const error = new Error(message);
+  error.status = response.status;
+  return error;
+}
+
+async function getSpotifyAccessToken(fetchImpl, forceRefresh = false) {
+  if (!forceRefresh && spotifyAccessToken && spotifyAccessTokenExpiresAt > Date.now() + 30_000) {
+    return spotifyAccessToken;
   }
 
-  const protocol = req.headers["x-forwarded-proto"] || "http";
-  const host = req.headers["x-forwarded-host"] || req.headers.host;
-  return `${protocol}://${host}`;
+  const response = await fetchImpl("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`).toString("base64")}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: "grant_type=client_credentials"
+  });
+  const payload = await readJsonResponse(response);
+  if (!response.ok || !payload.access_token) {
+    throw createSpotifyError(response, payload);
+  }
+
+  spotifyAccessToken = payload.access_token;
+  spotifyAccessTokenExpiresAt = Date.now() + Math.max(Number(payload.expires_in) || 3600, 60) * 1000;
+  return spotifyAccessToken;
+}
+
+async function searchSpotifyTracks(query, fetchImpl) {
+  const requestSearch = async (forceRefresh = false) => {
+    const token = await getSpotifyAccessToken(fetchImpl, forceRefresh);
+    const url = new URL("https://api.spotify.com/v1/search");
+    url.searchParams.set("q", query);
+    url.searchParams.set("type", "track");
+    url.searchParams.set("market", "ID");
+    url.searchParams.set("limit", "8");
+
+    return fetchImpl(url, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+  };
+
+  let response = await requestSearch();
+  if (response.status === 401) {
+    spotifyAccessToken = "";
+    spotifyAccessTokenExpiresAt = 0;
+    response = await requestSearch(true);
+  }
+
+  const payload = await readJsonResponse(response);
+  if (!response.ok) {
+    throw createSpotifyError(response, payload);
+  }
+
+  return (Array.isArray(payload?.tracks?.items) ? payload.tracks.items : [])
+    .map(normalizeSpotifyTrack)
+    .filter(Boolean);
 }
 
 function getPublicStorageUrl(storagePath) {
@@ -734,14 +927,16 @@ function serveStatic(req, res) {
   }
 
   let filePath = path.join(baseDir, safePath);
+  const relativePath = path.relative(baseDir, filePath);
 
-  if (!filePath.startsWith(baseDir)) {
+  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
     sendText(res, 403, "Forbidden");
     return;
   }
 
   if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-    filePath = baseDir === PUBLIC_DIR ? path.join(PUBLIC_DIR, "index.html") : "";
+    const isPageNavigation = baseDir === PUBLIC_DIR && !path.extname(safePath);
+    filePath = isPageNavigation ? path.join(PUBLIC_DIR, "index.html") : "";
   }
 
   if (!filePath || !fs.existsSync(filePath)) {
@@ -757,7 +952,10 @@ function serveStatic(req, res) {
       sendText(res, 404, "Not found");
       return;
     }
-    res.writeHead(200, { "Content-Type": contentType });
+    res.writeHead(200, {
+      "Content-Type": contentType,
+      ...(baseDir === PROTECTED_DIR ? { "Cache-Control": "no-store" } : {})
+    });
     res.end(data);
   });
 }
@@ -844,8 +1042,14 @@ async function deleteSingleMediaAsset(item) {
     return;
   }
 
-  const targetPath = path.join(UPLOADS_DIR, item.filename);
-  if (fs.existsSync(targetPath) && !item.filename.startsWith("seed-heart")) {
+  if (!item.filename || item.filename.startsWith("seed-heart")) {
+    return;
+  }
+
+  const targetPath = path.resolve(UPLOADS_DIR, item.filename);
+  const relativePath = path.relative(UPLOADS_DIR, targetPath);
+  const isSafePath = !relativePath.startsWith("..") && !path.isAbsolute(relativePath);
+  if (isSafePath && fs.existsSync(targetPath)) {
     fs.unlinkSync(targetPath);
   }
 }
@@ -883,9 +1087,61 @@ function parseUploadFiles(body) {
   return [];
 }
 
-async function handleApi(req, res) {
+function decodeMemoryUploadFiles(uploadFiles) {
+  if (uploadFiles.length > MAX_FILES_PER_MEMORY) {
+    throw new Error(`Maksimal ${MAX_FILES_PER_MEMORY} file untuk satu memori.`);
+  }
+
+  const decodedFiles = uploadFiles.map((file) => ({
+    originalName: file.originalName,
+    ...decodeUploadFile(file, ALLOWED_MEDIA_MIME_TYPES, "file media")
+  }));
+  const totalUploadBytes = decodedFiles.reduce((total, file) => total + file.buffer.length, 0);
+  if (totalUploadBytes > MAX_DECODED_UPLOAD_BYTES) {
+    throw new Error("Total file terlalu besar. Maksimal 4 MB per upload setelah kompresi.");
+  }
+
+  return decodedFiles;
+}
+
+async function uploadMemoryFiles(decodedFiles, title) {
+  const uploadTimestamp = Date.now();
+  const uploadResults = await Promise.allSettled(
+    decodedFiles.map(async (file, index) => {
+      const mediaType = file.mimeType.startsWith("video/") ? "video" : "image";
+      const slug = sanitizeName(title || file.originalName || "memory") || "memory";
+      const filename = `${uploadTimestamp}-${index + 1}-${slug}${file.ext}`;
+      const uploaded = await uploadMediaBuffer({
+        filename,
+        mimeType: file.mimeType,
+        buffer: file.buffer
+      });
+
+      return {
+        type: mediaType,
+        filename,
+        url: uploaded.url,
+        storagePath: uploaded.storagePath
+      };
+    })
+  );
+  const failedUpload = uploadResults.find((result) => result.status === "rejected");
+  if (failedUpload) {
+    await Promise.all(
+      uploadResults
+        .filter((result) => result.status === "fulfilled")
+        .map((result) => deleteSingleMediaAsset(result.value).catch(() => {}))
+    );
+    throw failedUpload.reason;
+  }
+
+  return uploadResults.map((result) => result.value);
+}
+
+async function handleApi(req, res, options = {}) {
   const requestUrl = new URL(req.url, "http://localhost");
   const pathname = requestUrl.pathname;
+  const fetchImpl = options.fetchImpl || globalThis.fetch;
 
   if (req.method === "GET" && pathname === "/api/health") {
     const deep = requestUrl.searchParams.get("deep") === "true";
@@ -893,6 +1149,7 @@ async function handleApi(req, res) {
       ok: true,
       storage: getStorageBackend(),
       vercelBlobConfig: VERCEL_BLOB_CONFIG_STATUS,
+      spotifyConfig: SPOTIFY_CONFIG_STATUS,
       googleConfig: GOOGLE_CONFIG_STATUS,
       checks: deep ? await runDeepHealthCheck() : undefined
     });
@@ -995,24 +1252,74 @@ async function handleApi(req, res) {
     return;
   }
 
-  if (req.method === "PUT" && pathname === "/api/admin/settings") {
-    const body = await parseBody(req).catch(() => null);
-    const heartSlots = Number(body?.heartSlots);
-    const anniversaryDate = body?.anniversaryDate || "";
-    const musicTitle = body?.musicTitle || "";
-    const musicUrl = body?.musicUrl || "";
-    const musicFile = body?.musicFile || null;
-    const galleryCount = (await readGallery()).length;
-
-    if (!Number.isInteger(heartSlots) || heartSlots < 1 || heartSlots > 120) {
-      sendJson(res, 400, { error: "Jumlah heart harus antara 1 sampai 120." });
+  if (req.method === "GET" && pathname === "/api/admin/spotify/search") {
+    if (!SPOTIFY_CONFIG_STATUS.clientId || !SPOTIFY_CONFIG_STATUS.clientSecret) {
+      sendJson(res, 503, {
+        error: "Pencarian Spotify belum aktif.",
+        detail: {
+          hint: "Tambahkan SPOTIFY_CLIENT_ID dan SPOTIFY_CLIENT_SECRET ke environment server."
+        }
+      });
       return;
     }
 
-    if (heartSlots < galleryCount) {
-      sendJson(res, 400, {
-        error: `Jumlah heart tidak boleh lebih kecil dari total memori saat ini (${galleryCount}).`
+    if (typeof fetchImpl !== "function") {
+      sendJson(res, 503, { error: "Server belum mendukung koneksi ke Spotify." });
+      return;
+    }
+
+    const query = String(requestUrl.searchParams.get("q") || "").trim().slice(0, 100);
+    if (query.length < 2) {
+      sendJson(res, 400, { error: "Masukkan minimal 2 karakter untuk mencari lagu." });
+      return;
+    }
+
+    try {
+      const tracks = await searchSpotifyTracks(query, fetchImpl);
+      sendJson(res, 200, { tracks });
+    } catch (error) {
+      console.error("Spotify search failed:", error.message);
+      sendJson(res, 502, {
+        error: "Pencarian Spotify sedang tidak tersedia.",
+        detail: {
+          message: error.message,
+          hint: "Periksa Client ID, Client Secret, dan status aplikasi di Spotify Developer Dashboard."
+        }
       });
+    }
+    return;
+  }
+
+  if (req.method === "PUT" && pathname === "/api/admin/settings") {
+    const body = await parseBody(req).catch(() => null);
+    if (!body) {
+      sendJson(res, 400, { error: "Data setting tidak valid." });
+      return;
+    }
+
+    const currentSettings = normalizeMusicSettings(await readSettings());
+    const heartSlots = body.heartSlots === undefined
+      ? currentSettings.heartSlots
+      : Number(body.heartSlots);
+    const anniversaryDate = body.anniversaryDate === undefined
+      ? currentSettings.anniversaryDate
+      : String(body.anniversaryDate || "").trim();
+    let musicTitle = String(body.musicTitle ?? currentSettings.musicTitle ?? "")
+      .trim()
+      .slice(0, 100);
+    const requestedMusicUrl = String(body.musicUrl || "").trim();
+    const musicFile = body.musicFile || null;
+    const removeMusic = Boolean(body.removeMusic);
+    const replaceMusicUrl = Boolean(body.replaceMusicUrl);
+    const requestedMusicSource = body.musicSource === undefined
+      ? currentSettings.musicSource
+      : String(body.musicSource || "none").trim();
+    const requestedSpotifyTrack = body.spotifyTrack === undefined
+      ? currentSettings.spotifyTrack
+      : normalizeSpotifyTrack(body.spotifyTrack);
+
+    if (body.heartSlots !== undefined && (!Number.isInteger(heartSlots) || heartSlots < 1 || heartSlots > 120)) {
+      sendJson(res, 400, { error: "Jumlah slot harus antara 1 sampai 120." });
       return;
     }
 
@@ -1021,66 +1328,98 @@ async function handleApi(req, res) {
       return;
     }
 
-    if (musicUrl && !isDirectAudioUrl(musicUrl)) {
+    if (!new Set(["none", "audio", "spotify"]).has(requestedMusicSource)) {
+      sendJson(res, 400, { error: "Sumber musik tidak valid." });
+      return;
+    }
+
+    if (!removeMusic && requestedMusicSource === "spotify" && !requestedSpotifyTrack) {
+      sendJson(res, 400, { error: "Pilih lagu dari hasil pencarian Spotify terlebih dahulu." });
+      return;
+    }
+
+    if (replaceMusicUrl && requestedMusicUrl && !isDirectAudioUrl(requestedMusicUrl)) {
       sendJson(res, 400, {
         error: "URL musik harus direct audio file (.mp3, .m4a, .ogg, .wav), bukan link YouTube/Spotify. Paling aman upload file musik dari panel admin."
       });
       return;
     }
 
-    const currentSettings = await readSettings();
-    let uploadedMusic = {};
-    if (musicFile?.fileData) {
-      const base64Match = musicFile.fileData.match(/^data:(.+);base64,(.+)$/);
-      if (!base64Match) {
-        sendJson(res, 400, { error: "Format file musik tidak valid." });
+    const clearStoredMusic = async () => {
+      if (!currentSettings.musicStoragePath) return;
+      await deleteSingleMediaAsset({
+        filename: currentSettings.musicFilename,
+        url: currentSettings.musicUrl,
+        storagePath: currentSettings.musicStoragePath
+      }).catch(() => {});
+    };
+
+    let nextMusic = {
+      musicUrl: currentSettings.musicUrl || "",
+      musicFilename: currentSettings.musicFilename || "",
+      musicStoragePath: currentSettings.musicStoragePath || ""
+    };
+    let nextMusicSource = currentSettings.musicSource || "none";
+    let nextSpotifyTrack = currentSettings.spotifyTrack || null;
+
+    if (removeMusic) {
+      await clearStoredMusic();
+      nextMusic = {
+        musicUrl: "",
+        musicFilename: "",
+        musicStoragePath: ""
+      };
+      nextMusicSource = "none";
+      nextSpotifyTrack = null;
+    } else if (requestedMusicSource === "spotify") {
+      nextMusicSource = "spotify";
+      nextSpotifyTrack = requestedSpotifyTrack;
+    } else if (musicFile?.fileData) {
+      let decoded;
+      try {
+        decoded = decodeUploadFile(musicFile, ALLOWED_AUDIO_MIME_TYPES, "file musik");
+      } catch (error) {
+        sendJson(res, 400, { error: error.message });
         return;
       }
 
-      const mimeType = musicFile.mimeType || base64Match[1];
-      if (!mimeType.startsWith("audio/")) {
-        sendJson(res, 400, { error: "File musik harus berupa audio." });
-        return;
-      }
-
-      const ext = getExtensionFromMime(mimeType);
-      if (!ext) {
-        sendJson(res, 400, { error: "Format musik belum didukung." });
-        return;
-      }
-
-      const slug = sanitizeName(musicTitle || musicFile.originalName || "our-song");
-      const filename = `${Date.now()}-music-${slug}${ext}`;
-      const buffer = Buffer.from(base64Match[2], "base64");
-      const uploaded = await uploadMediaBuffer({ filename, mimeType, buffer });
-
-      uploadedMusic = {
+      const slug = sanitizeName(musicTitle || musicFile.originalName || "our-song") || "our-song";
+      const filename = `${Date.now()}-music-${slug}${decoded.ext}`;
+      const uploaded = await uploadMediaBuffer({
+        filename,
+        mimeType: decoded.mimeType,
+        buffer: decoded.buffer
+      });
+      await clearStoredMusic();
+      nextMusic = {
         musicFilename: filename,
         musicStoragePath: uploaded.storagePath,
-        musicUrl: uploaded.url.startsWith("http")
-          ? uploaded.url
-          : `${getPublicBaseUrl(req)}${uploaded.url}`
+        musicUrl: uploaded.url
       };
-
-      if (currentSettings.musicStoragePath && currentSettings.musicStoragePath !== uploadedMusic.musicStoragePath) {
-        await deleteSingleMediaAsset({
-          filename: currentSettings.musicFilename,
-          url: currentSettings.musicUrl,
-          storagePath: currentSettings.musicStoragePath
-        });
-      }
+      nextMusicSource = "audio";
+    } else if (replaceMusicUrl) {
+      await clearStoredMusic();
+      nextMusic = {
+        musicUrl: requestedMusicUrl,
+        musicFilename: "",
+        musicStoragePath: ""
+      };
+      nextMusicSource = requestedMusicUrl ? "audio" : "none";
+    } else if (requestedMusicSource === "audio") {
+      nextMusicSource = nextMusic.musicUrl ? "audio" : "none";
     }
 
     const nextSettings = {
       ...currentSettings,
       heartSlots,
       anniversaryDate,
+      musicSource: nextMusicSource,
       musicTitle,
-      musicUrl,
-      ...uploadedMusic
+      spotifyTrack: nextSpotifyTrack,
+      ...nextMusic
     };
     await writeSettings(nextSettings);
-    sendJson(res, 200, nextSettings);
+    sendJson(res, 200, normalizeBlobSettings(nextSettings));
     return;
   }
 
@@ -1092,40 +1431,30 @@ async function handleApi(req, res) {
       return;
     }
 
-    const uploadedMedia = await Promise.all(
-      uploadFiles.map(async (file, index) => {
-        const base64Match = file.fileData?.match(/^data:(.+);base64,(.+)$/);
-        if (!base64Match) {
-          throw new Error("Format file tidak valid.");
-        }
+    const title = String(body.title || "").trim().slice(0, 120);
+    const description = String(body.description || "").trim().slice(0, 3000);
+    if (!title) {
+      sendJson(res, 400, { error: "Judul memori wajib diisi." });
+      return;
+    }
 
-        const mimeType = file.mimeType || base64Match[1];
-        const mediaType = mimeType.startsWith("video/") ? "video" : "image";
-        const ext = getExtensionFromMime(mimeType);
-        const slug = sanitizeName(body.title || file.originalName || "memory");
-        const filename = `${Date.now()}-${index + 1}-${slug}${ext}`;
-        const buffer = Buffer.from(base64Match[2], "base64");
-        const uploaded = await uploadMediaBuffer({ filename, mimeType, buffer });
-        const mediaUrl = uploaded.url.startsWith("http")
-          ? uploaded.url
-          : `${getPublicBaseUrl(req)}${uploaded.url}`;
+    let decodedFiles;
+    try {
+      decodedFiles = decodeMemoryUploadFiles(uploadFiles);
+    } catch (error) {
+      sendJson(res, 400, { error: error.message });
+      return;
+    }
 
-        return {
-          type: mediaType,
-          filename,
-          url: mediaUrl,
-          storagePath: uploaded.storagePath
-        };
-      })
-    );
+    const uploadedMedia = await uploadMemoryFiles(decodedFiles, title);
     const items = await readGallery();
     const primaryMedia = uploadedMedia[0];
 
     const entry = {
       id: crypto.randomUUID(),
       type: primaryMedia.type,
-      title: body.title || "Untitled Memory",
-      description: body.description || "",
+      title,
+      description,
       filename: primaryMedia.filename,
       url: primaryMedia.url,
       storagePath: primaryMedia.storagePath,
@@ -1141,8 +1470,13 @@ async function handleApi(req, res) {
     }
 
     items.push(entry);
-    await writeGallery(items);
-    sendJson(res, 201, entry);
+    try {
+      await writeGallery(items);
+    } catch (error) {
+      await Promise.all(uploadedMedia.map((media) => deleteSingleMediaAsset(media).catch(() => {})));
+      throw error;
+    }
+    sendJson(res, 201, normalizeBlobGallery([entry])[0]);
     return;
   }
 
@@ -1157,13 +1491,36 @@ async function handleApi(req, res) {
       return;
     }
 
-    if (!body || !body.title) {
+    const title = String(body?.title || "").trim().slice(0, 120);
+    if (!title) {
       sendJson(res, 400, { error: "Judul memori wajib diisi." });
       return;
     }
 
-    target.title = body.title;
-    target.description = body.description || "";
+    const replacementFiles = parseUploadFiles(body);
+    let replacementMedia = null;
+    let previousTarget = null;
+    if (replacementFiles.length) {
+      let decodedFiles;
+      try {
+        decodedFiles = decodeMemoryUploadFiles(replacementFiles);
+      } catch (error) {
+        sendJson(res, 400, { error: error.message });
+        return;
+      }
+
+      replacementMedia = await uploadMemoryFiles(decodedFiles, title);
+      previousTarget = { ...target };
+      const primaryMedia = replacementMedia[0];
+      target.type = primaryMedia.type;
+      target.filename = primaryMedia.filename;
+      target.url = primaryMedia.url;
+      target.storagePath = primaryMedia.storagePath;
+      target.media = replacementMedia;
+    }
+
+    target.title = title;
+    target.description = String(body.description || "").trim().slice(0, 3000);
     target.featured = Boolean(body.featured);
 
     if (target.featured) {
@@ -1174,8 +1531,19 @@ async function handleApi(req, res) {
       });
     }
 
-    await writeGallery(items);
-    sendJson(res, 200, target);
+    try {
+      await writeGallery(items);
+    } catch (error) {
+      if (replacementMedia) {
+        await Promise.all(replacementMedia.map((media) => deleteSingleMediaAsset(media).catch(() => {})));
+      }
+      throw error;
+    }
+
+    if (previousTarget) {
+      await deleteMediaAsset(previousTarget).catch(() => {});
+    }
+    sendJson(res, 200, normalizeBlobGallery([target])[0]);
     return;
   }
 
@@ -1212,7 +1580,7 @@ async function createRequestHandler(options = {}) {
           return;
         }
 
-        await handleApi(req, res);
+        await handleApi(req, res, options);
         return;
       }
 
@@ -1233,6 +1601,7 @@ async function createRequestHandler(options = {}) {
         error: "Terjadi kesalahan pada server.",
         storage: getStorageBackend(),
         vercelBlobConfig: VERCEL_BLOB_CONFIG_STATUS,
+        spotifyConfig: SPOTIFY_CONFIG_STATUS,
         googleConfig: GOOGLE_CONFIG_STATUS,
         detail: serializeError(error)
       });

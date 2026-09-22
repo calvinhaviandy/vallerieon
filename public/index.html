@@ -1,129 +1,25 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Our Memory Player</title>
-    <meta
-      name="description"
-      content="Tempat kecil untuk mengabadikan foto, cerita, dan lagu kenangan kita."
-    />
-    <link rel="stylesheet" href="/styles.css" />
+    <meta name="theme-color" content="#0b0c0a" />
+    <meta name="description" content="Tempat kecil untuk mengabadikan foto, cerita, dan lagu kenangan kita." />
+    <title>Gallery of Us</title>
     <script>
       window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+      if (!/^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)) {
+        const analyticsScript = document.createElement("script");
+        analyticsScript.defer = true;
+        analyticsScript.src = "/_vercel/insights/script.js";
+        document.head.appendChild(analyticsScript);
+      }
     </script>
-    <script defer src="/_vercel/insights/script.js"></script>
+    <script type="module" crossorigin src="/assets/index-N1wsNCEQ.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/api-EBNzJzUA.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-DyChvRDO.css">
   </head>
   <body>
-    <div class="ambient-memory" aria-hidden="true">
-      <span></span>
-      <span></span>
-      <span></span>
-    </div>
-
-    <div class="page-shell memory-page">
-      <main id="home" class="memory-stage">
-        <section class="carousel-shell" aria-label="Carousel memori">
-          <button id="prev-memory" class="nav-button nav-button-left" type="button" aria-label="Memori sebelumnya">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M15 5 8 12l7 7" />
-            </svg>
-          </button>
-
-          <div class="carousel-frame">
-            <div id="memory-track" class="memory-track"></div>
-            <article class="music-player" aria-label="Pemutar musik kenangan">
-              <div class="player-art">
-                <img id="player-art" alt="" />
-              </div>
-              <div class="player-copy">
-                <p class="player-label">Now playing</p>
-                <h2 id="player-title">Our favorite memory</h2>
-                <p id="player-subtitle">Gallery of Us</p>
-              </div>
-              <div class="player-progress" aria-hidden="true">
-                <span id="progress-fill"></span>
-              </div>
-              <div class="player-controls">
-                <button id="player-prev" class="round-button" type="button" aria-label="Lagu sebelumnya">
-                  <svg aria-hidden="true" viewBox="0 0 24 24">
-                    <path d="M11 6v12l-7-6 7-6Z" />
-                    <path d="M20 6v12l-7-6 7-6Z" />
-                  </svg>
-                </button>
-                <button id="play-button" class="play-button" type="button" aria-label="Putar musik">
-                  <svg id="play-icon" aria-hidden="true" viewBox="0 0 24 24">
-                    <path class="play-shape" d="M9 7.5v9l8-4.5-8-4.5Z" />
-                    <path class="pause-shape" d="M8 6.5h3v11H8zM13 6.5h3v11h-3z" />
-                  </svg>
-                </button>
-                <button id="player-next" class="round-button" type="button" aria-label="Lagu berikutnya">
-                  <svg aria-hidden="true" viewBox="0 0 24 24">
-                    <path d="M4 6v12l7-6-7-6Z" />
-                    <path d="M13 6v12l7-6-7-6Z" />
-                  </svg>
-                </button>
-              </div>
-              <audio id="memory-audio" preload="metadata">
-                <source src="/music/our-song.mp3" type="audio/mpeg" />
-              </audio>
-            </article>
-          </div>
-
-          <button id="next-memory" class="nav-button nav-button-right" type="button" aria-label="Memori berikutnya">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="m9 5 7 7-7 7" />
-            </svg>
-          </button>
-        </section>
-
-        <section class="story-panel" aria-live="polite">
-          <div class="memory-meta">
-            <span id="memory-type">Photo</span>
-            <span id="memory-date">Hari ini</span>
-          </div>
-          <h2 id="memory-title">Memuat memori...</h2>
-          <p id="memory-description">Sebentar ya, kenangannya sedang disiapkan.</p>
-        </section>
-      </main>
-
-      <section id="memory-wall" class="memory-wall-section" aria-labelledby="wall-title">
-        <div class="section-heading">
-          <p class="eyebrow">Konsep lama tetap hidup</p>
-          <h2 id="wall-title">Memory Wall</h2>
-          <p class="gallery-summary">
-            Semua memori yang sudah kamu upload tetap disimpan di sini sebagai arsip kecil kita.
-          </p>
-        </div>
-        <div id="memory-grid" class="memory-grid"></div>
-      </section>
-    </div>
-
-    <template id="slide-template">
-      <article class="memory-slide">
-        <div class="slide-media"></div>
-        <div class="slide-caption">
-          <span class="slide-number"></span>
-          <strong class="slide-title"></strong>
-        </div>
-      </article>
-    </template>
-
-    <template id="grid-template">
-      <article class="memory-card">
-        <div class="media-shell"></div>
-        <div class="memory-copy">
-          <div class="memory-meta">
-            <span class="grid-type"></span>
-            <span class="grid-date"></span>
-          </div>
-          <h3 class="grid-title"></h3>
-          <p class="memory-description grid-description"></p>
-        </div>
-      </article>
-    </template>
-
-    <script src="/config.js"></script>
-    <script src="/app.js" defer></script>
+    <div id="root"><p>Gallery of Us</p></div>
   </body>
 </html>
