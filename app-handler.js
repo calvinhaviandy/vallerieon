@@ -911,8 +911,8 @@ function getPublicStorageUrl(storagePath) {
   return `https://storage.googleapis.com/${bucketName}/${encodedPath}`;
 }
 
-function serveStatic(req, res) {
-  const requestPath = req.url === "/" ? "/index.html" : decodeURIComponent(req.url.split("?")[0]);
+function serveStatic(req, res, pathOverride = "") {
+  const requestPath = pathOverride || (req.url === "/" ? "/index.html" : decodeURIComponent(req.url.split("?")[0]));
 
   let baseDir = PUBLIC_DIR;
   let safePath = path.normalize(requestPath).replace(/^(\.\.[/\\])+/, "");
@@ -1572,6 +1572,15 @@ async function createRequestHandler(options = {}) {
 
   return async function requestHandler(req, res) {
     try {
+      const requestUrl = new URL(req.url, "http://localhost");
+      const isAdminRewrite = requestUrl.pathname === "/api/index" &&
+        requestUrl.searchParams.get("__gallery_page") === "admin";
+
+      if (isAdminRewrite) {
+        serveStatic(req, res, "/admin.html");
+        return;
+      }
+
       if (req.url.startsWith("/api/")) {
         applyCors(req, res);
         if (req.method === "OPTIONS") {

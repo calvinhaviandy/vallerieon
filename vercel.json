@@ -4,11 +4,7 @@
   "rewrites": [
     {
       "source": "/admin.html",
-      "destination": "/api/index"
-    },
-    {
-      "source": "/admin.js",
-      "destination": "/api/index"
+      "destination": "/api/index?__gallery_page=admin"
     }
   ]
 }

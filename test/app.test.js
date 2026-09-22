@@ -83,6 +83,9 @@ test("keeps admin files behind the shortcut cookie", async () => {
   const directAdmin = await fetch(`${baseUrl}/admin.html`);
   assert.equal(directAdmin.status, 404);
 
+  const directVercelRewrite = await fetch(`${baseUrl}/api/index?__gallery_page=admin`);
+  assert.equal(directVercelRewrite.status, 404);
+
   const shortcut = await fetch(`${baseUrl}/api/admin/shortcut`, { method: "POST" });
   const entryCookie = cookieFrom(shortcut);
   assert.ok(entryCookie.startsWith("admin_entry="));
@@ -92,6 +95,12 @@ test("keeps admin files behind the shortcut cookie", async () => {
   });
   assert.equal(protectedAdmin.status, 200);
   assert.match(await protectedAdmin.text(), /Masuk ke panel admin/);
+
+  const protectedVercelRewrite = await fetch(`${baseUrl}/api/index?__gallery_page=admin`, {
+    headers: { Cookie: entryCookie }
+  });
+  assert.equal(protectedVercelRewrite.status, 200);
+  assert.match(await protectedVercelRewrite.text(), /Masuk ke panel admin/);
 });
 
 test("creates an admin session and rejects unsupported music links", async () => {
