@@ -279,6 +279,10 @@ svg {
   margin: 0 auto;
 }
 
+.carousel-stage.is-single {
+  grid-template-columns: minmax(17rem, 27rem);
+}
+
 .carousel-focus {
   position: relative;
   width: 100%;

@@ -45,7 +45,7 @@ function MemoryStage({ items, activeIndex, direction, move }) {
 
   return (
     <div
-      className="carousel-stage"
+      className={`carousel-stage ${items.length === 1 ? "is-single" : ""}`}
       onPointerDown={(event) => {
         if (event.pointerType !== "mouse") pointerStart.current = event.clientX;
       }}
@@ -82,12 +82,16 @@ function MemoryStage({ items, activeIndex, direction, move }) {
           </div>
         </div>
 
-        <button className="carousel-arrow carousel-arrow-left" type="button" onClick={() => move(-1)} disabled={items.length < 2} aria-label="Memori sebelumnya" title="Memori sebelumnya">
-          <ChevronLeft />
-        </button>
-        <button className="carousel-arrow carousel-arrow-right" type="button" onClick={() => move(1)} disabled={items.length < 2} aria-label="Memori berikutnya" title="Memori berikutnya">
-          <ChevronRight />
-        </button>
+        {items.length > 1 && (
+          <>
+            <button className="carousel-arrow carousel-arrow-left" type="button" onClick={() => move(-1)} aria-label="Memori sebelumnya" title="Memori sebelumnya">
+              <ChevronLeft />
+            </button>
+            <button className="carousel-arrow carousel-arrow-right" type="button" onClick={() => move(1)} aria-label="Memori berikutnya" title="Memori berikutnya">
+              <ChevronRight />
+            </button>
+          </>
+        )}
       </div>
 
       {items.length > 1 && (
@@ -219,7 +223,7 @@ export function HomeApp() {
 
         <div className="scrapbook-intro">
           <p><Sparkles /> Our little archive</p>
-          <span>{memories.length} sweet memories</span>
+          <span>{memories.length} {memories.length === 1 ? "sweet memory" : "sweet memories"}</span>
         </div>
 
         {loading ? (

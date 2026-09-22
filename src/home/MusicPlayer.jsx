@@ -127,9 +127,11 @@ function SpotifyPlayer({ track, onPrevious, onNext, hasMultiple }) {
       </div>
 
       <div className="player-center-controls">
-        <ControlButton label="Memori sebelumnya" onClick={onPrevious} disabled={!hasMultiple}>
-          <ChevronLeft />
-        </ControlButton>
+        {hasMultiple && (
+          <ControlButton label="Memori sebelumnya" onClick={onPrevious}>
+            <ChevronLeft />
+          </ControlButton>
+        )}
         <button
           className="player-main-action spotify-action"
           type="button"
@@ -139,9 +141,11 @@ function SpotifyPlayer({ track, onPrevious, onNext, hasMultiple }) {
         >
           {showEmbed ? <X /> : <Play fill="currentColor" />}
         </button>
-        <ControlButton label="Memori berikutnya" onClick={onNext} disabled={!hasMultiple}>
-          <ChevronRight />
-        </ControlButton>
+        {hasMultiple && (
+          <ControlButton label="Memori berikutnya" onClick={onNext}>
+            <ChevronRight />
+          </ControlButton>
+        )}
       </div>
 
       <a className="player-external-link" href={spotifyUrl} target="_blank" rel="noreferrer">
@@ -232,9 +236,11 @@ function AudioPlayer({ config, activeItem, onPrevious, onNext, hasMultiple }) {
       </div>
 
       <div className="player-center-controls">
-        <ControlButton label="Memori sebelumnya" onClick={onPrevious} disabled={!hasMultiple}>
-          <ChevronLeft />
-        </ControlButton>
+        {hasMultiple && (
+          <ControlButton label="Memori sebelumnya" onClick={onPrevious}>
+            <ChevronLeft />
+          </ControlButton>
+        )}
         <ControlButton
           label={playing ? "Jeda musik" : "Putar musik"}
           className="player-main-action"
@@ -243,9 +249,11 @@ function AudioPlayer({ config, activeItem, onPrevious, onNext, hasMultiple }) {
         >
           {failed ? <RotateCcw /> : playing ? <Pause fill="currentColor" /> : <Play fill="currentColor" />}
         </ControlButton>
-        <ControlButton label="Memori berikutnya" onClick={onNext} disabled={!hasMultiple}>
-          <ChevronRight />
-        </ControlButton>
+        {hasMultiple && (
+          <ControlButton label="Memori berikutnya" onClick={onNext}>
+            <ChevronRight />
+          </ControlButton>
+        )}
       </div>
 
       <div className="player-progress">
