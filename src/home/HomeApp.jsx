@@ -6,6 +6,7 @@ import {
   Heart,
   Images,
   MapPin,
+  MousePointerClick,
   Play,
   RefreshCw,
   Sparkles
@@ -115,11 +116,11 @@ function MemoryThread({ items, activeIndex, select }) {
   );
 }
 
-function MemoryStage({ items, activeIndex, direction, move }) {
+function MemoryStage({ items, activeIndex, direction, transitionMode, moveMoment, moveChapter }) {
   const active = items[activeIndex];
-  const previous = items[getCircularIndex(activeIndex - 1, items.length)];
-  const next = items[getCircularIndex(activeIndex + 1, items.length)];
+  const chapterStops = getThreadStops(items);
   const pointerStart = useRef(null);
+  const suppressTap = useRef(false);
 
   if (!active) {
     return (
@@ -131,31 +132,51 @@ function MemoryStage({ items, activeIndex, direction, move }) {
     );
   }
 
+  const activeChapterIndex = Math.max(0, chapterStops.findIndex(({ item }) => item.entry.id === active.entry.id));
+  const previousChapter = chapterStops[getCircularIndex(activeChapterIndex - 1, chapterStops.length)]?.item;
+  const nextChapter = chapterStops[getCircularIndex(activeChapterIndex + 1, chapterStops.length)]?.item;
+  const hasMultipleChapters = chapterStops.length > 1;
+  const hasMultipleMoments = active.mediaCount > 1;
+
   function finishSwipe(clientX) {
     if (pointerStart.current === null) return;
     const distance = clientX - pointerStart.current;
     pointerStart.current = null;
-    if (Math.abs(distance) > 48) move(distance > 0 ? -1 : 1);
+    if (hasMultipleMoments && Math.abs(distance) > 48) {
+      suppressTap.current = true;
+      moveMoment(distance > 0 ? -1 : 1, "swipe");
+      window.setTimeout(() => { suppressTap.current = false; }, 0);
+    }
   }
+
+  function tapNext() {
+    if (suppressTap.current) {
+      suppressTap.current = false;
+      return;
+    }
+    moveMoment(1, "tap");
+  }
+
+  const MainMediaTag = hasMultipleMoments ? "button" : "div";
 
   return (
     <div
-      className={`carousel-stage ${items.length === 1 ? "is-single" : ""}`}
+      className={`carousel-stage ${hasMultipleChapters ? "" : "is-single"}`}
       onPointerDown={(event) => {
-        if (event.pointerType !== "mouse") pointerStart.current = event.clientX;
+        if (hasMultipleMoments && event.pointerType !== "mouse") pointerStart.current = event.clientX;
       }}
       onPointerUp={(event) => finishSwipe(event.clientX)}
       onPointerCancel={() => { pointerStart.current = null; }}
     >
-      {items.length > 1 && (
-        <button className="carousel-peek carousel-peek-left" type="button" onClick={() => move(-1)} aria-label="Memori sebelumnya" title="Memori sebelumnya">
+      {hasMultipleChapters && (
+        <button className="carousel-peek carousel-peek-left" type="button" onClick={() => moveChapter(-1)} aria-label="Chapter sebelumnya" title="Chapter sebelumnya">
           <span className="carousel-peek-visual" aria-hidden="true">
-            <MediaAsset media={previous.media} title={previous.entry.title} className="carousel-peek-media" preloadVideo />
-            {previous.media?.type === "video" && <span className="carousel-peek-video"><Play fill="currentColor" /></span>}
+            <MediaAsset media={previousChapter.media} title={previousChapter.entry.title} className="carousel-peek-media" preloadVideo />
+            {previousChapter.media?.type === "video" && <span className="carousel-peek-video"><Play fill="currentColor" /></span>}
           </span>
           <span className="carousel-peek-caption">
-            <small>previous</small>
-            <strong>{previous.entry.title}</strong>
+            <small>previous chapter</small>
+            <strong>{previousChapter.entry.title}</strong>
           </span>
           <span className="carousel-peek-icon" aria-hidden="true"><Heart fill="currentColor" /></span>
         </button>
@@ -163,41 +184,72 @@ function MemoryStage({ items, activeIndex, direction, move }) {
 
       <div className="carousel-focus">
         <div
-          className={`carousel-active-media ${direction > 0 ? "slide-forward" : "slide-backward"}`}
+          className={`carousel-active-media ${transitionMode === "tap" ? "tap-reveal" : direction > 0 ? "slide-forward" : "slide-backward"}`}
           key={`${active.entry.id}-${active.mediaIndex}`}
         >
           <span className="photo-tape photo-tape-left" aria-hidden="true" />
           <span className="photo-tape photo-tape-right" aria-hidden="true" />
-          <MediaAsset media={active.media} title={active.entry.title} className="carousel-main-media" eager autoPlayVideo />
+          <MainMediaTag
+            className={`carousel-tap-target ${hasMultipleMoments ? "is-tappable" : ""}`}
+            {...(hasMultipleMoments ? {
+              type: "button",
+              onClick: tapNext,
+              "aria-label": "Tampilkan momen berikutnya",
+              title: "Tampilkan momen berikutnya"
+            } : {})}
+          >
+            <MediaAsset media={active.media} title={active.entry.title} className="carousel-main-media" eager autoPlayVideo />
+            {hasMultipleMoments && (
+              <span className="carousel-tap-cue" aria-hidden="true">
+                <span className="carousel-tap-cue-icon"><MousePointerClick /></span>
+                <span className="carousel-tap-cue-copy">
+                  <strong>tap foto</strong>
+                  <small>lihat momen lainnya</small>
+                </span>
+              </span>
+            )}
+          </MainMediaTag>
           <div className="carousel-index" aria-live="polite">
             <Heart fill="currentColor" />
-            <span>{String(activeIndex + 1).padStart(2, "0")}</span>
+            <span>{String(active.mediaIndex + 1).padStart(2, "0")}</span>
             <i />
-            <span>{String(items.length).padStart(2, "0")}</span>
+            <span>{String(active.mediaCount).padStart(2, "0")}</span>
           </div>
         </div>
 
-        {items.length > 1 && (
+        {hasMultipleChapters && (
           <>
-            <button className="carousel-arrow carousel-arrow-left" type="button" onClick={() => move(-1)} aria-label="Memori sebelumnya" title="Memori sebelumnya">
+            <button
+              className="carousel-arrow carousel-arrow-left"
+              type="button"
+              onClick={() => moveChapter(-1)}
+              aria-label="Chapter sebelumnya"
+              title="Chapter sebelumnya"
+            >
               <ChevronLeft />
             </button>
-            <button className="carousel-arrow carousel-arrow-right" type="button" onClick={() => move(1)} aria-label="Memori berikutnya" title="Memori berikutnya">
+            <button
+              className="carousel-arrow carousel-arrow-right"
+              type="button"
+              onClick={() => moveChapter(1)}
+              aria-label="Chapter berikutnya"
+              title="Chapter berikutnya"
+            >
               <ChevronRight />
             </button>
           </>
         )}
       </div>
 
-      {items.length > 1 && (
-        <button className="carousel-peek carousel-peek-right" type="button" onClick={() => move(1)} aria-label="Memori berikutnya" title="Memori berikutnya">
+      {hasMultipleChapters && (
+        <button className="carousel-peek carousel-peek-right" type="button" onClick={() => moveChapter(1)} aria-label="Chapter berikutnya" title="Chapter berikutnya">
           <span className="carousel-peek-visual" aria-hidden="true">
-            <MediaAsset media={next.media} title={next.entry.title} className="carousel-peek-media" preloadVideo />
-            {next.media?.type === "video" && <span className="carousel-peek-video"><Play fill="currentColor" /></span>}
+            <MediaAsset media={nextChapter.media} title={nextChapter.entry.title} className="carousel-peek-media" preloadVideo />
+            {nextChapter.media?.type === "video" && <span className="carousel-peek-video"><Play fill="currentColor" /></span>}
           </span>
           <span className="carousel-peek-caption">
-            <small>next</small>
-            <strong>{next.entry.title}</strong>
+            <small>next chapter</small>
+            <strong>{nextChapter.entry.title}</strong>
           </span>
           <span className="carousel-peek-icon" aria-hidden="true"><Sparkles /></span>
         </button>
@@ -207,21 +259,28 @@ function MemoryStage({ items, activeIndex, direction, move }) {
 }
 
 function MemoryDots({ items, activeIndex, select }) {
-  if (items.length < 2) return null;
+  const active = items[activeIndex];
+  if (!active || active.mediaCount < 2) return null;
+  const firstMomentIndex = activeIndex - active.mediaIndex;
+  const moments = items.slice(firstMomentIndex, firstMomentIndex + active.mediaCount);
+
   return (
-    <div className="memory-dots" aria-label="Pilih memori">
-      {items.map((item, index) => (
-        <button
-          className={index === activeIndex ? "is-active" : ""}
-          key={`${item.entry.id}-${item.mediaIndex}`}
-          type="button"
-          onClick={() => select(index)}
-          aria-label={`Buka ${item.entry.title}`}
-          title={item.entry.title}
-        >
-          <Heart fill={index === activeIndex ? "currentColor" : "none"} />
-        </button>
-      ))}
+    <div className="memory-dots" aria-label={`Pilih momen dari ${active.entry.title}`}>
+      {moments.map((item, momentIndex) => {
+        const itemIndex = firstMomentIndex + momentIndex;
+        return (
+          <button
+            className={itemIndex === activeIndex ? "is-active" : ""}
+            key={`${item.entry.id}-${item.mediaIndex}`}
+            type="button"
+            onClick={() => select(itemIndex)}
+            aria-label={`Buka momen ${momentIndex + 1}`}
+            title={`Momen ${momentIndex + 1}`}
+          >
+            <Heart fill={itemIndex === activeIndex ? "currentColor" : "none"} />
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -232,14 +291,15 @@ export function HomeApp() {
   const [config, setConfig] = useState({});
   const [activeIndex, setActiveIndex] = useState(0);
   const [direction, setDirection] = useState(1);
+  const [transitionMode, setTransitionMode] = useState("navigation");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const carouselItems = useMemo(() => flattenMemories(memories), [memories]);
+  const chapterStops = useMemo(() => getThreadStops(carouselItems), [carouselItems]);
   const active = carouselItems[activeIndex];
   const activeThreadStop = useMemo(() => {
-    const stops = getThreadStops(carouselItems);
-    return Math.max(0, stops.findIndex(({ item }) => item.entry.id === active?.entry.id));
-  }, [active?.entry.id, carouselItems]);
+    return Math.max(0, chapterStops.findIndex(({ item }) => item.entry.id === active?.entry.id));
+  }, [active?.entry.id, chapterStops]);
   const threadPalette = THREAD_PALETTES[activeThreadStop % THREAD_PALETTES.length];
 
   const loadData = useCallback(async () => {
@@ -272,16 +332,35 @@ export function HomeApp() {
     setActiveIndex(featuredIndex >= 0 ? featuredIndex : 0);
   }, [carouselItems.length]);
 
-  const move = useCallback((step) => {
-    if (carouselItems.length < 2) return;
+  const moveMoment = useCallback((step, source = "tap") => {
+    const current = carouselItems[activeIndex];
+    if (!current || current.mediaCount < 2) return;
+    setTransitionMode(source);
     setDirection(step > 0 ? 1 : -1);
-    setActiveIndex((current) => getCircularIndex(current + step, carouselItems.length));
-  }, [carouselItems.length]);
+    const firstMomentIndex = activeIndex - current.mediaIndex;
+    const nextMomentIndex = getCircularIndex(current.mediaIndex + step, current.mediaCount);
+    setActiveIndex(firstMomentIndex + nextMomentIndex);
+  }, [activeIndex, carouselItems]);
+
+  const moveChapter = useCallback((step) => {
+    if (chapterStops.length < 2) return;
+    const currentChapterIndex = Math.max(
+      0,
+      chapterStops.findIndex(({ item }) => item.entry.id === carouselItems[activeIndex]?.entry.id)
+    );
+    const targetChapter = chapterStops[getCircularIndex(currentChapterIndex + step, chapterStops.length)];
+    if (!targetChapter) return;
+    setTransitionMode("navigation");
+    setDirection(step > 0 ? 1 : -1);
+    setActiveIndex(targetChapter.itemIndex);
+  }, [activeIndex, carouselItems, chapterStops]);
 
   const selectMemory = useCallback((index) => {
+    const staysInChapter = carouselItems[index]?.entry.id === carouselItems[activeIndex]?.entry.id;
+    setTransitionMode(staysInChapter ? "tap" : "navigation");
     setDirection(index >= activeIndex ? 1 : -1);
     setActiveIndex(index);
-  }, [activeIndex]);
+  }, [activeIndex, carouselItems]);
 
   async function openAdmin() {
     try {
@@ -300,12 +379,12 @@ export function HomeApp() {
         return;
       }
       if (event.target.closest?.("button, input, textarea, select, a")) return;
-      if (event.key === "ArrowLeft") move(-1);
-      if (event.key === "ArrowRight") move(1);
+      if (event.key === "ArrowLeft") moveChapter(-1);
+      if (event.key === "ArrowRight") moveChapter(1);
     }
     document.addEventListener("keydown", handleKeyboard);
     return () => document.removeEventListener("keydown", handleKeyboard);
-  }, [move]);
+  }, [moveChapter]);
 
   const description = active?.entry?.description?.trim() || "Memori kecil yang tetap berarti.";
   const activeType = active?.media?.type === "video" ? "Video" : "Photo";
@@ -344,7 +423,7 @@ export function HomeApp() {
 
         <div className="scrapbook-intro">
           <p><Sparkles /> Our little archive</p>
-          <span>{memories.length} {memories.length === 1 ? "sweet memory" : "sweet memories"}</span>
+          <span>{memories.length} {memories.length === 1 ? "sweet chapter" : "sweet chapters"}</span>
         </div>
 
         {loading ? (
@@ -353,15 +432,22 @@ export function HomeApp() {
           <div className="home-error"><strong>Koneksi terputus</strong><span>{error}</span><button type="button" onClick={loadData}>Coba lagi</button></div>
         ) : (
           <>
-            <MemoryStage items={carouselItems} activeIndex={activeIndex} direction={direction} move={move} />
+            <MemoryStage
+              items={carouselItems}
+              activeIndex={activeIndex}
+              direction={direction}
+              transitionMode={transitionMode}
+              moveMoment={moveMoment}
+              moveChapter={moveChapter}
+            />
 
             <div className="center-player-wrap">
               <MusicPlayer
                 config={config}
                 activeItem={active}
-                onPrevious={() => move(-1)}
-                onNext={() => move(1)}
-                hasMultiple={carouselItems.length > 1}
+                onPrevious={() => moveChapter(-1)}
+                onNext={() => moveChapter(1)}
+                hasMultiple={chapterStops.length > 1}
               />
             </div>
 
@@ -373,7 +459,7 @@ export function HomeApp() {
                   <span>{active.entry.featured ? "Our favorite" : activeType}</span>
                   <i />
                   <span><CalendarDays /> {formatDate(active.entry.createdAt)}</span>
-                  {active.mediaCount > 1 && <><i /><span>{active.mediaIndex + 1}/{active.mediaCount}</span></>}
+                  {active.mediaCount > 1 && <><i /><span><Images /> moment {active.mediaIndex + 1}/{active.mediaCount}</span></>}
                 </div>
                 <h1>{active.entry.title}</h1>
                 <p>{description}</p>

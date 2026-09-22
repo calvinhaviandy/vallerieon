@@ -26,6 +26,27 @@
     "url": "/uploads/1776868621825-first-meet-in-jakardah.jpg",
     "storagePath": "1776868621825-first-meet-in-jakardah.jpg",
     "createdAt": "2026-04-22T14:37:01.827Z",
-    "featured": true
+    "featured": true,
+    "media": [
+      {
+        "type": "image",
+        "filename": "1776868621825-first-meet-in-jakardah.jpg",
+        "url": "/uploads/1776868621825-first-meet-in-jakardah.jpg",
+        "storagePath": "1776868621825-first-meet-in-jakardah.jpg"
+      },
+      {
+        "type": "image",
+        "filename": "1790083968864-1-first-meet-in-jakardah.webp",
+        "url": "/uploads/1790083968864-1-first-meet-in-jakardah.webp",
+        "storagePath": "1790083968864-1-first-meet-in-jakardah.webp"
+      },
+      {
+        "type": "image",
+        "filename": "1790083978002-1-first-meet-in-jakardah.webp",
+        "url": "/uploads/1790083978002-1-first-meet-in-jakardah.webp",
+        "storagePath": "1790083978002-1-first-meet-in-jakardah.webp"
+      }
+    ],
+    "updatedAt": "2026-09-22T13:32:58.003Z"
   }
 ]

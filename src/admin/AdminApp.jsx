@@ -17,6 +17,7 @@ import {
   Music2,
   Pencil,
   Plus,
+  RefreshCw,
   Save,
   Search,
   Sparkles,
@@ -33,6 +34,7 @@ import {
   getActiveMusicSource,
   getMemoryMedia,
   isDirectAudioUrl,
+  MAX_CHAPTER_MEDIA,
   MAX_REQUEST_FILE_BYTES,
   prepareFiles,
   readFileAsDataUrl
@@ -406,11 +408,12 @@ function MusicPanel({ settings, onSaved, onUnauthorized, notify }) {
   );
 }
 
-function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, notify, announce, panelRef }) {
+function MemoryEditor({ editingItem, editorIntent, onCancelEdit, onSaved, onUnauthorized, notify, announce, panelRef }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [featured, setFeatured] = useState(false);
   const [files, setFiles] = useState([]);
+  const [mediaMode, setMediaMode] = useState("append");
   const [aiPreviewUrl, setAiPreviewUrl] = useState("");
   const [generatingDescription, setGeneratingDescription] = useState(false);
   const [aiMessage, setAiMessage] = useState(null);
@@ -418,6 +421,13 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
   const [message, setMessage] = useState(null);
   const [inputKey, setInputKey] = useState(0);
   const aiImage = files.find((file) => AI_SUPPORTED_IMAGE_TYPES.has(file.type));
+  const existingMedia = editingItem ? getMemoryMedia(editingItem) : [];
+  const addingMoments = Boolean(editingItem && editorIntent === "append");
+  const appendWouldOverflow = Boolean(
+    editingItem &&
+    mediaMode === "append" &&
+    existingMedia.length + files.length > MAX_CHAPTER_MEDIA
+  );
 
   useEffect(() => {
     if (editingItem) {
@@ -425,12 +435,13 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
       setDescription(editingItem.description || "");
       setFeatured(Boolean(editingItem.featured));
       setFiles([]);
+      setMediaMode("append");
       setAiMessage(null);
       setInputKey((value) => value + 1);
-      setMessage({ text: "Media lama tetap dipakai jika tidak diganti.", type: "info" });
+      setMessage(null);
       panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [editingItem, panelRef]);
+  }, [editingItem, editorIntent, panelRef]);
 
   useEffect(() => {
     if (!aiImage) {
@@ -448,6 +459,7 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
     setDescription("");
     setFeatured(false);
     setFiles([]);
+    setMediaMode("append");
     setAiMessage(null);
     setInputKey((value) => value + 1);
   }
@@ -455,7 +467,7 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
   async function generateDescription() {
     const cleanTitle = title.trim();
     if (!cleanTitle) {
-      setAiMessage({ text: "Isi judul memori agar AI mendapat konteks ceritanya.", type: "error" });
+      setAiMessage({ text: "Isi judul chapter agar AI mendapat konteks ceritanya.", type: "error" });
       return;
     }
     if (!aiImage) {
@@ -504,8 +516,12 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
       setMessage({ text: "Pilih minimal satu foto atau video.", type: "error" });
       return;
     }
+    if (appendWouldOverflow) {
+      setMessage({ text: `Satu chapter maksimal berisi ${MAX_CHAPTER_MEDIA} momen.`, type: "error" });
+      return;
+    }
     setBusy(true);
-    setMessage({ text: editingItem ? "Menyimpan perubahan..." : "Menyiapkan media...", type: "info" });
+    setMessage({ text: editingItem && files.length && mediaMode === "append" ? "Menambahkan momen..." : editingItem ? "Menyimpan chapter..." : "Menyiapkan chapter...", type: "info" });
     try {
       let mediaFiles = [];
       if (files.length) {
@@ -521,21 +537,23 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
         title: title.trim(),
         description: description.trim(),
         featured,
+        mediaMode,
         files: mediaFiles
       });
 
       const wasEditing = Boolean(editingItem);
+      const uploadedCount = files.length;
       const saved = editingItem
         ? await request(`/api/admin/media?id=${encodeURIComponent(editingItem.id)}`, { method: "PUT", body: payload })
         : await request("/api/admin/upload", { method: "POST", body: payload });
       const isFeatured = Boolean(saved.featured);
-      const successText = isFeatured
-        ? wasEditing
-          ? `“${saved.title}” diperbarui dan tampil sebagai featured.`
-          : `“${saved.title}” ditambahkan sebagai featured.`
-        : wasEditing
-          ? `“${saved.title}” berhasil diperbarui.`
-          : `“${saved.title}” berhasil ditambahkan.`;
+      const successText = wasEditing && uploadedCount && mediaMode === "append"
+        ? `${uploadedCount} momen baru ditambahkan ke “${saved.title}”.`
+        : wasEditing && uploadedCount && mediaMode === "replace"
+          ? `Media di “${saved.title}” berhasil diganti.`
+          : wasEditing
+            ? `Chapter “${saved.title}” berhasil diperbarui.`
+            : `Chapter “${saved.title}” berhasil dibuat${isFeatured ? " sebagai featured" : ""}.`;
 
       onSaved(saved);
       reset();
@@ -544,7 +562,7 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
       setMessage({ text: successText, type: "success" });
       announce({
         type: isFeatured ? "featured" : "success",
-        title: isFeatured ? "Featured aktif" : wasEditing ? "Perubahan tersimpan" : "Memori ditambahkan",
+        title: wasEditing && uploadedCount && mediaMode === "append" ? "Momen ditambahkan" : isFeatured ? "Featured aktif" : wasEditing ? "Perubahan tersimpan" : "Chapter dibuat",
         text: successText
       });
     } catch (error) {
@@ -561,30 +579,62 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
   return (
     <section id="memory-editor" ref={panelRef} className="admin-surface memory-editor">
       <PanelHeading
-        eyebrow={editingItem ? "Edit memory" : "New memory"}
-        title={editingItem ? "Perbarui cerita" : "Tambah memori"}
+        eyebrow={editingItem ? addingMoments ? "Add moments" : "Edit chapter" : "New chapter"}
+        title={editingItem ? addingMoments ? "Tambah momen" : "Perbarui chapter" : "Buat chapter"}
         icon={ImagePlus}
         action={editingItem ? <button className="panel-close-button" type="button" onClick={() => { reset(); onCancelEdit(); setMessage(null); }} aria-label="Batal edit" title="Batal edit"><X /></button> : null}
       />
 
       <form onSubmit={submit}>
         <label>
-          <span className="field-label">Judul memori</span>
+          <span className="field-label">Judul chapter</span>
           <input type="text" value={title} maxLength="120" onChange={(event) => setTitle(event.target.value)} placeholder="Nama momen ini" required />
         </label>
 
+        {editingItem && existingMedia.length > 0 && (
+          <div className="chapter-media-summary">
+            <div className="chapter-media-heading">
+              <span>Chapter moments</span>
+              <strong><Images /> {existingMedia.length}/{MAX_CHAPTER_MEDIA}</strong>
+            </div>
+            <div className="chapter-media-strip">
+              {existingMedia.map((media, index) => (
+                <span className="chapter-media-thumb" key={media.storagePath || media.url || media.filename || index}>
+                  <MediaAsset media={media} title={`${editingItem.title} ${index + 1}`} className="chapter-media-thumb-asset" />
+                  <small>{String(index + 1).padStart(2, "0")}</small>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         <label className="memory-dropzone" htmlFor="memory-files">
-          <input key={inputKey} id="memory-files" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,video/mp4,video/webm,video/quicktime" multiple onChange={(event) => { setFiles(Array.from(event.target.files || [])); setAiMessage(null); setMessage(null); }} />
+          <input key={inputKey} id="memory-files" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,video/mp4,video/webm,video/quicktime" multiple onChange={(event) => { setFiles(Array.from(event.target.files || [])); setMediaMode("append"); setAiMessage(null); setMessage(null); }} />
           <span className="dropzone-icon"><Plus /></span>
-          <span><strong>{files.length ? `${files.length} file dipilih` : editingItem ? "Ganti media" : "Tambah foto atau video"}</strong><small>Tarik file ke sini atau pilih dari perangkat</small></span>
+          <span><strong>{files.length ? `${files.length} momen dipilih` : editingItem ? "Tambah momen ke chapter" : "Pilih foto atau video"}</strong><small>Tarik file ke sini atau pilih dari perangkat</small></span>
           <CloudUpload />
         </label>
 
         {files.length > 0 && (
           <div className="selected-file-list">
-            {files.map((file) => (
-              <div key={`${file.name}-${file.lastModified}`}><span>{file.name}</span><small>{formatSize(file.size)}</small></div>
+            {files.map((file, index) => (
+              <div key={`${file.name}-${file.lastModified}-${index}`}><span>{file.name}</span><small>{formatSize(file.size)}</small></div>
             ))}
+          </div>
+        )}
+
+        {editingItem && files.length > 0 && (
+          <div className={`media-update-mode ${appendWouldOverflow ? "is-over-limit" : ""}`}>
+            <span className="field-label">Media update</span>
+            <div className="media-mode-buttons" role="group" aria-label="Cara memperbarui media chapter">
+              <button className={mediaMode === "append" ? "is-active" : ""} type="button" aria-pressed={mediaMode === "append"} onClick={() => setMediaMode("append")}>
+                <Plus /><span>Tambahkan</span>
+              </button>
+              <button className={mediaMode === "replace" ? "is-active" : ""} type="button" aria-pressed={mediaMode === "replace"} onClick={() => setMediaMode("replace")}>
+                <RefreshCw /><span>Ganti semua</span>
+              </button>
+            </div>
+            <small>{mediaMode === "append" ? `${existingMedia.length} lama + ${files.length} baru / ${MAX_CHAPTER_MEDIA}` : `${files.length} media baru`}</small>
           </div>
         )}
 
@@ -622,7 +672,10 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
         <div className="panel-submit-row">
           <Message message={message} />
           <button className="admin-primary-button" type="submit" disabled={busy}>
-            <BusyLabel busy={busy} busyText="Mengunggah"><CloudUpload /><span>{editingItem ? "Simpan perubahan" : "Upload memori"}</span></BusyLabel>
+            <BusyLabel busy={busy} busyText={editingItem && files.length && mediaMode === "append" ? "Menambahkan" : "Menyimpan"}>
+              <CloudUpload />
+              <span>{editingItem ? files.length ? mediaMode === "append" ? `Tambah ${files.length} momen` : "Ganti media" : "Simpan chapter" : "Buat chapter"}</span>
+            </BusyLabel>
           </button>
         </div>
       </form>
@@ -630,7 +683,7 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
   );
 }
 
-function MemoryLibrary({ items, onEdit, onDeleteStarted, onDeleteFailed, onUnauthorized, notify, announce }) {
+function MemoryLibrary({ items, onEdit, onAddMoments, onDeleteStarted, onDeleteFailed, onUnauthorized, notify, announce }) {
   const [deletingId, setDeletingId] = useState("");
   const [message, setMessage] = useState(null);
 
@@ -641,7 +694,7 @@ function MemoryLibrary({ items, onEdit, onDeleteStarted, onDeleteFailed, onUnaut
     setMessage({ text: `Menghapus “${item.title}”...`, type: "info" });
     announce({
       type: "info",
-      title: "Menghapus memori",
+      title: "Menghapus chapter",
       text: `“${item.title}” langsung disembunyikan sambil file dibersihkan.`
     });
     try {
@@ -649,7 +702,7 @@ function MemoryLibrary({ items, onEdit, onDeleteStarted, onDeleteFailed, onUnaut
       notify("gallery");
       const successText = `“${item.title}” berhasil dihapus.`;
       setMessage({ text: successText, type: "success" });
-      announce({ type: "success", title: "Memori dihapus", text: successText });
+      announce({ type: "success", title: "Chapter dihapus", text: successText });
     } catch (error) {
       if (error.status === 401) onUnauthorized();
       else {
@@ -666,8 +719,8 @@ function MemoryLibrary({ items, onEdit, onDeleteStarted, onDeleteFailed, onUnaut
     <section id="memory-library" className="admin-surface library-workspace">
       <PanelHeading
         eyebrow="Library"
-        title="Memori tersimpan"
-        action={<span className="library-count">{items.length} memori</span>}
+        title="Chapter tersimpan"
+        action={<span className="library-count">{items.length} chapter</span>}
       />
       <Message message={message} />
       {items.length ? (
@@ -691,6 +744,7 @@ function MemoryLibrary({ items, onEdit, onDeleteStarted, onDeleteFailed, onUnaut
                   <small>{formatDate(item.createdAt, true)}</small>
                 </div>
                 <div className="library-actions">
+                  <button className="add-moment-action" type="button" onClick={() => onAddMoments(item)} aria-label={`Tambah momen ke ${item.title}`} title="Tambah momen"><ImagePlus /><span>Tambah momen</span></button>
                   <button type="button" onClick={() => onEdit(item)} aria-label={`Edit ${item.title}`} title="Edit"><Pencil /><span>Edit</span></button>
                   <button className="danger-action" type="button" onClick={() => remove(item)} disabled={deletingId === item.id} aria-label={`Hapus ${item.title}`} title="Hapus">
                     {deletingId === item.id ? <LoaderCircle className="animate-spin" /> : <Trash2 />}<span>Hapus</span>
@@ -701,7 +755,7 @@ function MemoryLibrary({ items, onEdit, onDeleteStarted, onDeleteFailed, onUnaut
           })}
         </div>
       ) : (
-        <div className="admin-library-empty"><Images /><strong>Belum ada memori</strong><span>Memori pertama akan muncul di sini.</span></div>
+        <div className="admin-library-empty"><Images /><strong>Belum ada chapter</strong><span>Chapter pertama akan muncul di sini.</span></div>
       )}
     </section>
   );
@@ -725,7 +779,7 @@ function AdminSidebar() {
   const items = [
     ["#dashboard", "Overview", Sparkles],
     ["#music-settings", "Soundtrack", Music2],
-    ["#memory-editor", "New memory", ImagePlus],
+    ["#memory-editor", "New chapter", ImagePlus],
     ["#memory-library", "Library", Images]
   ];
   return (
@@ -746,6 +800,7 @@ export function AdminApp() {
   const [gallery, setGallery] = useState([]);
   const [settings, setSettings] = useState({});
   const [editingItem, setEditingItem] = useState(null);
+  const [editorIntent, setEditorIntent] = useState("edit");
   const [loggingOut, setLoggingOut] = useState(false);
   const [toast, setToast] = useState(null);
   const editorRef = useRef(null);
@@ -772,6 +827,11 @@ export function AdminApp() {
     });
   }, []);
 
+  const openEditor = useCallback((item, intent = "edit") => {
+    setEditorIntent(intent);
+    setEditingItem({ ...item });
+  }, []);
+
   const handleDeleteStarted = useCallback((id) => {
     setGallery((current) => current.filter((item) => item.id !== id));
     setEditingItem((current) => current?.id === id ? null : current);
@@ -789,6 +849,7 @@ export function AdminApp() {
   const handleUnauthorized = useCallback(() => {
     setAuthenticated(false);
     setEditingItem(null);
+    setEditorIntent("edit");
     setToast(null);
   }, []);
 
@@ -848,7 +909,7 @@ export function AdminApp() {
               <span>Semua yang sedang hidup di Gallery of Us.</span>
             </div>
             <dl>
-              <div><dt>Memori</dt><dd>{gallery.length}</dd></div>
+              <div><dt>Chapter</dt><dd>{gallery.length}</dd></div>
               <div><dt>Media</dt><dd>{mediaCount}</dd></div>
               <div><dt>Soundtrack</dt><dd>{musicSource === "spotify" ? "Spotify" : musicSource === "audio" ? "Audio" : "Off"}</dd></div>
             </dl>
@@ -863,7 +924,8 @@ export function AdminApp() {
             />
             <MemoryEditor
               editingItem={editingItem}
-              onCancelEdit={() => setEditingItem(null)}
+              editorIntent={editorIntent}
+              onCancelEdit={() => { setEditingItem(null); setEditorIntent("edit"); }}
               onSaved={handleMemorySaved}
               onUnauthorized={handleUnauthorized}
               notify={notify}
@@ -874,7 +936,8 @@ export function AdminApp() {
 
           <MemoryLibrary
             items={gallery}
-            onEdit={setEditingItem}
+            onEdit={(item) => openEditor(item, "edit")}
+            onAddMoments={(item) => openEditor(item, "append")}
             onDeleteStarted={handleDeleteStarted}
             onDeleteFailed={loadWorkspace}
             onUnauthorized={handleUnauthorized}

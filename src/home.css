@@ -541,6 +541,10 @@ svg {
   animation: photo-backward 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.carousel-active-media.tap-reveal {
+  animation: photo-tap-reveal 480ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 @keyframes photo-forward {
   from { opacity: 0; transform: translateX(2rem) rotate(1deg) scale(0.97); }
   to { opacity: 1; transform: translateX(0) rotate(-0.6deg) scale(1); }
@@ -551,6 +555,30 @@ svg {
   to { opacity: 1; transform: translateX(0) rotate(-0.6deg) scale(1); }
 }
 
+@keyframes photo-tap-reveal {
+  0% { opacity: 0.18; transform: translate(1.4rem, 0.85rem) rotate(4deg) scale(0.94); }
+  62% { opacity: 1; transform: translate(-0.18rem, -0.08rem) rotate(-1.4deg) scale(1.015); }
+  100% { opacity: 1; transform: translate(0, 0) rotate(-0.6deg) scale(1); }
+}
+
+.carousel-tap-target {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: #f4e9ed;
+  color: #31262a;
+}
+
+.carousel-tap-target.is-tappable {
+  cursor: pointer;
+  touch-action: pan-y;
+}
+
 .carousel-main-media {
   display: block;
   width: 100%;
@@ -559,6 +587,86 @@ svg {
   object-fit: cover;
   background: #f4e9ed;
   user-select: none;
+  transition: filter 180ms ease, transform 180ms ease;
+}
+
+.carousel-tap-target.is-tappable:active .carousel-main-media {
+  filter: saturate(0.92);
+  transform: scale(0.985);
+}
+
+.carousel-tap-cue {
+  position: absolute;
+  right: 0.65rem;
+  bottom: 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.48rem;
+  padding: 0.4rem 0.58rem 0.42rem 0.42rem;
+  border: 1px solid rgba(49, 38, 42, 0.82);
+  border-radius: 5px;
+  background: rgba(255, 250, 252, 0.92);
+  box-shadow: 2px 2px 0 rgba(49, 38, 42, 0.8);
+  color: #31262a;
+  opacity: 0.9;
+  pointer-events: none;
+  transform: rotate(-2deg);
+  transition: opacity 160ms ease, transform 160ms ease;
+  animation: tap-cue-arrive 520ms 420ms both cubic-bezier(0.16, 1, 0.3, 1), tap-cue-nudge 3.2s 1.5s ease-in-out infinite;
+}
+
+.carousel-tap-cue-icon {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: #ff7f9e;
+  color: #fff;
+}
+
+.carousel-tap-cue-icon svg {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.carousel-tap-cue-copy {
+  display: grid;
+  gap: 0.05rem;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.carousel-tap-cue-copy strong {
+  color: #d8486d;
+  font-family: var(--font-sans);
+  font-size: 0.64rem;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.carousel-tap-cue-copy small {
+  font-family: var(--font-serif);
+  font-size: 0.68rem;
+  font-style: italic;
+  line-height: 1.1;
+}
+
+.carousel-tap-target:hover .carousel-tap-cue {
+  opacity: 1;
+  transform: translate(-0.08rem, -0.08rem) rotate(-3deg);
+}
+
+@keyframes tap-cue-arrive {
+  from { opacity: 0; transform: translateY(0.6rem) rotate(4deg) scale(0.9); }
+  to { opacity: 0.9; transform: translateY(0) rotate(-2deg) scale(1); }
+}
+
+@keyframes tap-cue-nudge {
+  0%, 76%, 100% { transform: rotate(-2deg) translateY(0); }
+  84% { transform: rotate(-3deg) translateY(-0.18rem); }
+  92% { transform: rotate(-1deg) translateY(0); }
 }
 
 .photo-tape {
@@ -712,40 +820,54 @@ svg {
   color: #ff6f91;
 }
 
-.carousel-peek-icon svg {
-  width: 0.8rem;
-  height: 0.8rem;
-}
-
 .carousel-arrow {
   position: absolute;
-  top: 50%;
-  z-index: 6;
+  top: 48%;
+  z-index: 8;
   display: grid;
-  width: 2.65rem;
-  height: 2.65rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
   place-items: center;
   border: 2px solid #31262a;
   border-radius: 50%;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.94);
   color: #31262a;
-  box-shadow: 3px 3px 0 #31262a;
+  box-shadow: 3px 3px 0 rgba(49, 38, 42, 0.9);
   cursor: pointer;
   transform: translateY(-50%);
-  transition: background 160ms ease, color 160ms ease;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
-.carousel-arrow:hover:not(:disabled) {
-  background: #ff6f91;
+.carousel-arrow svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  stroke-width: 2.4;
+}
+
+.carousel-arrow:hover {
+  background: #ff7f9e;
   color: #fff;
+  box-shadow: 2px 2px 0 rgba(49, 38, 42, 0.9);
+  transform: translateY(calc(-50% + 1px));
+}
+
+.carousel-arrow:active {
+  box-shadow: 1px 1px 0 rgba(49, 38, 42, 0.9);
+  transform: translate(1px, calc(-50% + 2px));
 }
 
 .carousel-arrow-left {
-  left: 0.9rem;
+  left: 0.85rem;
 }
 
 .carousel-arrow-right {
-  right: 0.9rem;
+  right: 0.85rem;
+}
+
+.carousel-peek-icon svg {
+  width: 0.8rem;
+  height: 0.8rem;
 }
 
 .center-player-wrap {
@@ -1229,16 +1351,16 @@ svg {
   }
 
   .carousel-arrow {
-    width: 2.35rem;
-    height: 2.35rem;
+    width: 2.75rem;
+    height: 2.75rem;
   }
 
   .carousel-arrow-left {
-    left: 0.65rem;
+    left: 0.55rem;
   }
 
   .carousel-arrow-right {
-    right: 0.65rem;
+    right: 0.55rem;
   }
 
   .center-player-wrap {

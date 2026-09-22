@@ -83,6 +83,7 @@ const DEFAULT_SETTINGS = {
   spotifyTrack: null
 };
 const MAX_FILES_PER_MEMORY = 12;
+const MAX_MEDIA_PER_MEMORY = 24;
 const MAX_DECODED_UPLOAD_BYTES = 4 * 1024 * 1024;
 const ALLOWED_MEDIA_MIME_TYPES = new Set([
   "image/jpeg",
@@ -1179,6 +1180,29 @@ function getEntryMedia(item) {
   ].filter((media) => media.url || media.filename || media.storagePath);
 }
 
+function mergeMemoryMedia(existingMedia, uploadedMedia, mediaMode = "append") {
+  const current = Array.isArray(existingMedia) ? existingMedia.filter(Boolean) : [];
+  const incoming = Array.isArray(uploadedMedia) ? uploadedMedia.filter(Boolean) : [];
+  const nextMedia = mediaMode === "replace" ? incoming : [...current, ...incoming];
+
+  if (nextMedia.length > MAX_MEDIA_PER_MEMORY) {
+    throw new Error(`Maksimal ${MAX_MEDIA_PER_MEMORY} momen untuk satu chapter.`);
+  }
+
+  return nextMedia;
+}
+
+function applyEntryMedia(item, mediaItems) {
+  const primaryMedia = mediaItems[0];
+  if (!primaryMedia) return;
+
+  item.type = primaryMedia.type;
+  item.filename = primaryMedia.filename;
+  item.url = primaryMedia.url;
+  item.storagePath = primaryMedia.storagePath;
+  item.media = mediaItems;
+}
+
 function parseUploadFiles(body) {
   if (Array.isArray(body.files) && body.files.length) {
     return body.files;
@@ -1199,7 +1223,7 @@ function parseUploadFiles(body) {
 
 function decodeMemoryUploadFiles(uploadFiles) {
   if (uploadFiles.length > MAX_FILES_PER_MEMORY) {
-    throw new Error(`Maksimal ${MAX_FILES_PER_MEMORY} file untuk satu memori.`);
+    throw new Error(`Maksimal ${MAX_FILES_PER_MEMORY} file dalam sekali upload.`);
   }
 
   const decodedFiles = uploadFiles.map((file) => ({
@@ -1663,31 +1687,38 @@ async function handleApi(req, res, options = {}) {
       return;
     }
 
-    const replacementFiles = parseUploadFiles(body);
-    let replacementMedia = null;
+    const uploadedFiles = parseUploadFiles(body);
+    const mediaMode = body?.mediaMode === "replace" ? "replace" : "append";
+    const currentMedia = getEntryMedia(target);
+    let uploadedMedia = null;
     let previousTarget = null;
-    if (replacementFiles.length) {
-      let decodedFiles;
+    if (uploadedFiles.length) {
       try {
-        decodedFiles = decodeMemoryUploadFiles(replacementFiles);
+        mergeMemoryMedia(currentMedia, uploadedFiles, mediaMode);
       } catch (error) {
         sendJson(res, 400, { error: error.message });
         return;
       }
 
-      replacementMedia = await uploadMemoryFiles(decodedFiles, title);
-      previousTarget = { ...target };
-      const primaryMedia = replacementMedia[0];
-      target.type = primaryMedia.type;
-      target.filename = primaryMedia.filename;
-      target.url = primaryMedia.url;
-      target.storagePath = primaryMedia.storagePath;
-      target.media = replacementMedia;
+      let decodedFiles;
+      try {
+        decodedFiles = decodeMemoryUploadFiles(uploadedFiles);
+      } catch (error) {
+        sendJson(res, 400, { error: error.message });
+        return;
+      }
+
+      uploadedMedia = await uploadMemoryFiles(decodedFiles, title);
+      if (mediaMode === "replace") {
+        previousTarget = { ...target };
+      }
+      applyEntryMedia(target, mergeMemoryMedia(currentMedia, uploadedMedia, mediaMode));
     }
 
     target.title = title;
     target.description = String(body.description || "").trim().slice(0, 3000);
     target.featured = Boolean(body.featured);
+    target.updatedAt = new Date().toISOString();
 
     if (target.featured) {
       items.forEach((item) => {
@@ -1700,8 +1731,8 @@ async function handleApi(req, res, options = {}) {
     try {
       await writeGallery(items);
     } catch (error) {
-      if (replacementMedia) {
-        await Promise.all(replacementMedia.map((media) => deleteSingleMediaAsset(media).catch(() => {})));
+      if (uploadedMedia) {
+        await Promise.all(uploadedMedia.map((media) => deleteSingleMediaAsset(media).catch(() => {})));
       }
       throw error;
     }
@@ -1788,5 +1819,8 @@ async function createRequestHandler(options = {}) {
 }
 
 module.exports = {
-  createRequestHandler
+  createRequestHandler,
+  testUtils: {
+    mergeMemoryMedia
+  }
 };

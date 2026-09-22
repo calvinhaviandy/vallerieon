@@ -10,7 +10,7 @@ process.env.OPENAI_API_KEY = "openai-test-key";
 process.env.OPENAI_VISION_MODEL = "gpt-test-vision";
 process.env.OPENAI_REASONING_EFFORT = "medium";
 
-const { createRequestHandler } = require("../app-handler");
+const { createRequestHandler, testUtils } = require("../app-handler");
 
 let server;
 let baseUrl;
@@ -87,6 +87,29 @@ after(async () => {
 function cookieFrom(response) {
   return response.headers.get("set-cookie")?.split(";", 1)[0] || "";
 }
+
+test("keeps multiple moments inside one chapter when media is appended", () => {
+  const existingMedia = [
+    { type: "image", filename: "chapter-cover.jpg", url: "/uploads/chapter-cover.jpg" },
+    { type: "image", filename: "chapter-second.jpg", url: "/uploads/chapter-second.jpg" }
+  ];
+  const newMedia = [
+    { type: "image", filename: "chapter-third.jpg", url: "/uploads/chapter-third.jpg" }
+  ];
+
+  assert.deepEqual(
+    testUtils.mergeMemoryMedia(existingMedia, newMedia, "append"),
+    [...existingMedia, ...newMedia]
+  );
+  assert.deepEqual(
+    testUtils.mergeMemoryMedia(existingMedia, newMedia, "replace"),
+    newMedia
+  );
+  assert.throws(
+    () => testUtils.mergeMemoryMedia(Array.from({ length: 24 }, (_, index) => ({ filename: `${index}.jpg` })), newMedia),
+    /Maksimal 24 momen/
+  );
+});
 
 test("serves the public app and JSON data", async () => {
   const [home, gallery, config] = await Promise.all([

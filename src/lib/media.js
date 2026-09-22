@@ -1,4 +1,5 @@
 export const MAX_FILE_COUNT = 12;
+export const MAX_CHAPTER_MEDIA = 24;
 export const MAX_REQUEST_FILE_BYTES = 3 * 1024 * 1024;
 const IMAGE_OPTIMIZE_THRESHOLD = 650 * 1024;
 

@@ -14,8 +14,8 @@ Arsip kenangan pribadi berbasis React dengan carousel foto/video, soundtrack Spo
 
 ## Fitur
 
-- Carousel memori responsif dengan gesture, keyboard, dan animasi
-- Beberapa foto/video dalam satu memori
+- Carousel memori responsif dengan tap foto, swipe, keyboard, dan animasi polaroid
+- Beberapa foto/video dalam satu chapter, termasuk menambah momen baru ke chapter lama
 - Spotify search di admin dan Spotify Embed di halaman utama
 - Player audio untuk file upload atau direct audio URL
 - Upload, edit, featured memory, dan hapus memori
@@ -76,7 +76,8 @@ DISABLE_LOCAL_SEED=true
 
 ## Batas Upload
 
-- Maksimal 12 file per memori
+- Maksimal 12 file dalam sekali upload
+- Maksimal 24 foto/video dalam satu chapter
 - Maksimal total 3 MB dari browser setelah kompresi
 - Gambar besar dikecilkan dan dikonversi ke WebP otomatis sebelum upload
 - Audio upload maksimal 3 MB
