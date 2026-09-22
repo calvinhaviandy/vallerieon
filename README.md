@@ -39,7 +39,7 @@ npm start
 http://localhost:3000
 ```
 
-Panel admin dibuka dari halaman utama dengan `Ctrl + R`. Password lokal default adalah `galleryofus`; gunakan `ADMIN_PASSWORD` untuk menggantinya.
+Panel admin dibuka dari halaman utama dengan `Ctrl + Alt + A`. Password lokal default adalah `galleryofus`; gunakan `ADMIN_PASSWORD` untuk menggantinya.
 
 Perintah lain:
 

@@ -189,7 +189,7 @@ export function HomeApp() {
 
   useEffect(() => {
     function handleKeyboard(event) {
-      if (event.ctrlKey && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "r") {
+      if ((event.ctrlKey || event.metaKey) && event.altKey && !event.shiftKey && event.key.toLowerCase() === "a") {
         event.preventDefault();
         openAdmin();
         return;
