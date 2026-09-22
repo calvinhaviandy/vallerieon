@@ -153,10 +153,18 @@ svg {
 }
 
 .scrapbook-main {
+  --thread-accent: #d8486d;
+  --thread-soft: #ffd5df;
+  --thread-shift-x: 0px;
+  --thread-shift-y: 0px;
   position: relative;
+  isolation: isolate;
   min-height: calc(100svh - 4.5rem);
-  padding: 1.3rem 1.25rem 4rem;
-  background: #fff8fa;
+  padding: 1.3rem 1.25rem 5.5rem;
+  background-color: #fff8fa;
+  background-image: radial-gradient(circle, rgba(216, 72, 109, 0.11) 0.8px, transparent 0.9px);
+  background-position: 0 0;
+  background-size: 24px 24px;
 }
 
 .scrapbook-main::before,
@@ -168,19 +176,265 @@ svg {
 }
 
 .scrapbook-main::before {
-  top: 4rem;
-  left: 0;
-  width: 4.5rem;
-  height: 10rem;
-  background: #badbff;
+  top: 0;
+  bottom: 0;
+  left: clamp(2.5rem, 6vw, 7rem);
+  width: 1px;
+  background: rgba(216, 72, 109, 0.13);
+  box-shadow: 5px 0 0 rgba(216, 72, 109, 0.06);
 }
 
 .scrapbook-main::after {
-  right: 0;
-  bottom: 8rem;
-  width: 5rem;
-  height: 8rem;
-  background: #b9f3d0;
+  display: none;
+}
+
+.memory-thread-scene {
+  position: absolute;
+  inset: 2.8rem 1rem 2rem;
+  width: min(94rem, calc(100% - 2rem));
+  margin: 0 auto;
+  pointer-events: none;
+}
+
+.memory-thread-line,
+.memory-thread-stations {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.memory-thread-line {
+  z-index: 1;
+  overflow: visible;
+  transform: translate3d(var(--thread-shift-x), var(--thread-shift-y), 0);
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.memory-thread-stations {
+  z-index: 5;
+  pointer-events: none;
+  transform: translate3d(var(--thread-shift-x), var(--thread-shift-y), 0);
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.memory-thread-line path {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.memory-thread-paper-gap {
+  stroke: rgba(255, 248, 250, 0.9);
+  stroke-width: 7;
+}
+
+.memory-thread-base {
+  stroke: #d8afb9;
+  stroke-width: 1.6;
+  stroke-dasharray: 2 5;
+  stroke-linecap: round;
+}
+
+.memory-thread-progress {
+  stroke: var(--thread-accent);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: stroke 260ms ease, stroke-dasharray 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.memory-thread-stop {
+  position: absolute;
+  top: calc(17% + var(--stop-row) * 18%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #80666f;
+  cursor: pointer;
+  pointer-events: auto;
+  transform: rotate(var(--stop-tilt));
+}
+
+.memory-thread-stop.is-left {
+  left: 3.8%;
+}
+
+.memory-thread-stop.is-right {
+  right: 3.8%;
+}
+
+.memory-thread-pin {
+  position: relative;
+  display: grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  place-items: center;
+  border: 1.5px solid #31262a;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 2px 2px 0 #31262a;
+  font-size: 0.52rem;
+  font-weight: 750;
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+.memory-thread-pin::after {
+  position: absolute;
+  width: 0.42rem;
+  height: 0.42rem;
+  border: 1px solid #31262a;
+  border-radius: 50%;
+  background: #fff8fa;
+  content: "";
+}
+
+.memory-thread-stop.is-left .memory-thread-pin::after {
+  right: 0.02rem;
+  bottom: 0.1rem;
+}
+
+.memory-thread-stop.is-right .memory-thread-pin::after {
+  bottom: 0.1rem;
+  left: 0.02rem;
+}
+
+.memory-thread-stop:hover .memory-thread-pin,
+.memory-thread-stop.is-active .memory-thread-pin {
+  background: var(--thread-accent);
+  color: #fff;
+  transform: scale(1.12);
+}
+
+.memory-thread-stop.is-active .memory-thread-pin {
+  box-shadow: 0 0 0 0.32rem var(--thread-soft), 2px 2px 0 #31262a;
+}
+
+.memory-thread-pin svg {
+  width: 0.72rem;
+  height: 0.72rem;
+}
+
+.memory-thread-ticket {
+  position: absolute;
+  z-index: 3;
+  bottom: 3.5%;
+  left: 4.8%;
+  display: grid;
+  width: 11rem;
+  min-height: 5.7rem;
+  align-content: center;
+  gap: 0.32rem;
+  padding: 0.9rem 0.85rem 0.8rem;
+  border: 1.5px solid #31262a;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0.4rem 0.45rem 0 var(--thread-soft);
+  color: #31262a;
+  pointer-events: none;
+  text-align: left;
+  transform: rotate(-3deg);
+  animation: thread-ticket-arrive 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.memory-thread-ticket::before {
+  position: absolute;
+  top: -0.42rem;
+  left: 50%;
+  width: 2.8rem;
+  height: 0.82rem;
+  border: 1px solid rgba(49, 38, 42, 0.12);
+  background: color-mix(in srgb, var(--thread-soft) 82%, #fff);
+  content: "";
+  transform: translateX(-50%) rotate(2deg);
+}
+
+.memory-thread-ticket::after {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  width: 2.1rem;
+  border-top: 1.5px dashed var(--thread-accent);
+  content: "";
+}
+
+.memory-thread-ticket small {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--thread-accent);
+  font-size: 0.48rem;
+  font-style: normal;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.memory-thread-ticket small svg {
+  width: 0.62rem;
+  height: 0.62rem;
+}
+
+.memory-thread-ticket strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.1;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.memory-thread-ticket > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.24rem;
+  color: #9a7b86;
+  font-size: 0.48rem;
+  text-transform: uppercase;
+}
+
+.memory-thread-ticket > span svg {
+  width: 0.58rem;
+  height: 0.58rem;
+  color: var(--thread-accent);
+}
+
+@keyframes thread-ticket-arrive {
+  from { opacity: 0; transform: translateX(-0.8rem) rotate(-6deg); }
+  to { opacity: 1; transform: translateX(0) rotate(-3deg); }
+}
+
+.memory-thread-more,
+.memory-thread-whisper {
+  position: absolute;
+  z-index: 1;
+  color: #aa8994;
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-style: italic;
+}
+
+.memory-thread-more {
+  right: 6%;
+  bottom: 8%;
+}
+
+.memory-thread-whisper {
+  bottom: 0;
+  left: 50%;
+  padding: 0.18rem 0.45rem;
+  background: #fff8fa;
+  transform: translateX(-50%) rotate(-2deg);
+}
+
+@media (max-width: 1200px) {
+  .memory-thread-more {
+    display: none;
+  }
 }
 
 .scrapbook-intro {
@@ -234,23 +488,6 @@ svg {
   transform: rotate(-7deg);
 }
 
-.sticker-love {
-  top: 14rem;
-  right: max(1.6rem, calc(50% - 34rem));
-  width: 3.2rem;
-  height: 3.2rem;
-  border-radius: 50%;
-  background: #ff8ca7;
-  color: #fff;
-  transform: rotate(8deg);
-  animation: sticker-bob 3.6s ease-in-out infinite;
-}
-
-.sticker-love svg {
-  width: 1.25rem;
-  height: 1.25rem;
-}
-
 .sticker-sparkle {
   right: max(1.6rem, calc(50% - 38rem));
   bottom: 18rem;
@@ -260,11 +497,6 @@ svg {
   background: #badbff;
   color: #315f98;
   transform: rotate(10deg);
-}
-
-@keyframes sticker-bob {
-  0%, 100% { transform: rotate(8deg) translateY(0); }
-  50% { transform: rotate(4deg) translateY(-5px); }
 }
 
 .carousel-stage {
@@ -930,6 +1162,10 @@ svg {
 }
 
 @media (max-width: 900px) {
+  .memory-thread-scene {
+    display: none;
+  }
+
   .carousel-stage {
     grid-template-columns: minmax(5rem, 8rem) minmax(18rem, 25rem) minmax(5rem, 8rem);
     gap: 1.5rem;

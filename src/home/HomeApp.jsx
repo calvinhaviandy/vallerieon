@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Heart,
   Images,
+  MapPin,
   Play,
   RefreshCw,
   Sparkles
@@ -18,6 +19,100 @@ import { MusicPlayer } from "./MusicPlayer";
 function getCircularIndex(index, length) {
   if (!length) return 0;
   return (index + length) % length;
+}
+
+const THREAD_PALETTES = [
+  { accent: "#d8486d", soft: "#ffd5df" },
+  { accent: "#397a5a", soft: "#c9f3d9" },
+  { accent: "#3f75ad", soft: "#d8eaff" },
+  { accent: "#9a6b12", soft: "#fff0ba" }
+];
+
+function formatThreadDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "our day";
+  return date.toLocaleDateString("id-ID", { day: "2-digit", month: "short" });
+}
+
+function getThreadStops(items) {
+  const seen = new Set();
+  return items.reduce((stops, item, itemIndex) => {
+    const id = item.entry.id;
+    if (seen.has(id)) return stops;
+    seen.add(id);
+    stops.push({ item, itemIndex });
+    return stops;
+  }, []);
+}
+
+function MemoryThread({ items, activeIndex, select }) {
+  const stops = getThreadStops(items);
+  const activeId = items[activeIndex]?.entry.id;
+  const activeStop = Math.max(0, stops.findIndex(({ item }) => item.entry.id === activeId));
+  const activeThread = stops[activeStop];
+  const visibleStart = Math.min(Math.max(activeStop - 3, 0), Math.max(stops.length - 8, 0));
+  const visibleStops = stops.slice(visibleStart, visibleStart + 8).map((stop, index) => ({
+    ...stop,
+    stopIndex: visibleStart + index
+  }));
+  const progress = stops.length > 1 ? 12 + (activeStop / (stops.length - 1)) * 88 : 62;
+
+  if (!stops.length) return null;
+
+  return (
+    <div className="memory-thread-scene">
+      <svg className="memory-thread-line" viewBox="0 0 1000 760" preserveAspectRatio="none" aria-hidden="true">
+        <path
+          className="memory-thread-paper-gap"
+          d="M70 145 C95 50 250 55 340 100 C420 140 420 225 325 260 C185 315 90 350 95 470 C100 600 230 680 365 645 C445 625 475 675 500 720 C525 675 555 625 635 645 C770 680 900 600 905 470 C910 350 815 315 675 260 C580 225 580 140 660 100 C750 55 905 50 930 145"
+        />
+        <path
+          className="memory-thread-base"
+          d="M70 145 C95 50 250 55 340 100 C420 140 420 225 325 260 C185 315 90 350 95 470 C100 600 230 680 365 645 C445 625 475 675 500 720 C525 675 555 625 635 645 C770 680 900 600 905 470 C910 350 815 315 675 260 C580 225 580 140 660 100 C750 55 905 50 930 145"
+          pathLength="100"
+        />
+        <path
+          className="memory-thread-progress"
+          d="M70 145 C95 50 250 55 340 100 C420 140 420 225 325 260 C185 315 90 350 95 470 C100 600 230 680 365 645 C445 625 475 675 500 720 C525 675 555 625 635 645 C770 680 900 600 905 470 C910 350 815 315 675 260 C580 225 580 140 660 100 C750 55 905 50 930 145"
+          pathLength="100"
+          style={{ strokeDasharray: `${progress} 100` }}
+        />
+      </svg>
+
+      <div className="memory-thread-stations" aria-label="Jalur kenangan kita">
+        {visibleStops.map(({ item, itemIndex, stopIndex }, index) => {
+          const isActive = item.entry.id === activeId;
+          const side = index % 2 === 0 ? "left" : "right";
+          return (
+            <button
+              className={`memory-thread-stop is-${side} ${isActive ? "is-active" : ""}`}
+              key={item.entry.id}
+              style={{ "--stop-row": Math.floor(index / 2), "--stop-tilt": `${side === "left" ? -4 + index : 4 - index}deg` }}
+              type="button"
+              onClick={() => select(itemIndex)}
+              aria-label={`Buka memori ${item.entry.title}`}
+              title={item.entry.title}
+            >
+              <span className="memory-thread-pin" aria-hidden="true">
+                {isActive ? <Heart fill="currentColor" /> : String(stopIndex + 1).padStart(2, "0")}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <span className="memory-thread-ticket" key={activeThread.item.entry.id} aria-hidden="true">
+        <small><MapPin /> chapter {String(activeStop + 1).padStart(2, "0")}</small>
+        <strong>{activeThread.item.entry.title}</strong>
+        <span><Heart fill="currentColor" /> {formatThreadDate(activeThread.item.entry.createdAt)} / kept forever</span>
+      </span>
+
+      {stops.length > visibleStops.length && (
+        <span className="memory-thread-more" aria-hidden="true">+{stops.length - visibleStops.length} more chapters</span>
+      )}
+      <span className="memory-thread-whisper" aria-hidden="true">still writing our story</span>
+    </div>
+  );
 }
 
 function MemoryStage({ items, activeIndex, direction, move }) {
@@ -132,6 +227,7 @@ function MemoryDots({ items, activeIndex, select }) {
 }
 
 export function HomeApp() {
+  const mainRef = useRef(null);
   const [memories, setMemories] = useState([]);
   const [config, setConfig] = useState({});
   const [activeIndex, setActiveIndex] = useState(0);
@@ -140,6 +236,11 @@ export function HomeApp() {
   const [error, setError] = useState("");
   const carouselItems = useMemo(() => flattenMemories(memories), [memories]);
   const active = carouselItems[activeIndex];
+  const activeThreadStop = useMemo(() => {
+    const stops = getThreadStops(carouselItems);
+    return Math.max(0, stops.findIndex(({ item }) => item.entry.id === active?.entry.id));
+  }, [active?.entry.id, carouselItems]);
+  const threadPalette = THREAD_PALETTES[activeThreadStop % THREAD_PALETTES.length];
 
   const loadData = useCallback(async () => {
     try {
@@ -209,6 +310,20 @@ export function HomeApp() {
   const description = active?.entry?.description?.trim() || "Memori kecil yang tetap berarti.";
   const activeType = active?.media?.type === "video" ? "Video" : "Photo";
 
+  function moveThreadWithPointer(event) {
+    if (event.pointerType === "touch") return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 8;
+    const y = ((event.clientY - bounds.top) / bounds.height - 0.5) * 6;
+    event.currentTarget.style.setProperty("--thread-shift-x", `${x.toFixed(2)}px`);
+    event.currentTarget.style.setProperty("--thread-shift-y", `${y.toFixed(2)}px`);
+  }
+
+  function resetThreadPosition(event) {
+    event.currentTarget.style.setProperty("--thread-shift-x", "0px");
+    event.currentTarget.style.setProperty("--thread-shift-y", "0px");
+  }
+
   return (
     <div className="home-app cute-home">
       <header className="home-header">
@@ -216,9 +331,15 @@ export function HomeApp() {
         <p className="header-love-note"><Heart fill="currentColor" /> for us, always</p>
       </header>
 
-      <main className="scrapbook-main">
+      <main
+        className="scrapbook-main"
+        ref={mainRef}
+        style={{ "--thread-accent": threadPalette.accent, "--thread-soft": threadPalette.soft }}
+        onPointerMove={moveThreadWithPointer}
+        onPointerLeave={resetThreadPosition}
+      >
+        <MemoryThread items={carouselItems} activeIndex={activeIndex} select={selectMemory} />
         <span className="cute-sticker sticker-you" aria-hidden="true">you + me</span>
-        <span className="cute-sticker sticker-love" aria-hidden="true"><Heart fill="currentColor" /></span>
         <span className="cute-sticker sticker-sparkle" aria-hidden="true"><Sparkles /></span>
 
         <div className="scrapbook-intro">

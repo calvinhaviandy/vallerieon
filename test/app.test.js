@@ -6,13 +6,17 @@ process.env.ADMIN_PASSWORD = "galleryofus-test";
 process.env.ADMIN_SESSION_SECRET = "galleryofus-test-secret";
 process.env.SPOTIFY_CLIENT_ID = "spotify-test-client";
 process.env.SPOTIFY_CLIENT_SECRET = "spotify-test-secret";
+process.env.OPENAI_API_KEY = "openai-test-key";
+process.env.OPENAI_VISION_MODEL = "gpt-test-vision";
+process.env.OPENAI_REASONING_EFFORT = "medium";
 
 const { createRequestHandler } = require("../app-handler");
 
 let server;
 let baseUrl;
+let lastOpenAIRequest;
 
-async function spotifyFetch(input) {
+async function spotifyFetch(input, options = {}) {
   const url = String(input);
   if (url === "https://accounts.spotify.com/api/token") {
     return new Response(JSON.stringify({ access_token: "spotify-test-token", expires_in: 3600 }), {
@@ -43,7 +47,27 @@ async function spotifyFetch(input) {
     });
   }
 
-  throw new Error(`Unexpected Spotify request: ${url}`);
+  if (url === "https://api.openai.com/v1/responses") {
+    lastOpenAIRequest = JSON.parse(options.body);
+    return new Response(JSON.stringify({
+      output: [
+        {
+          type: "message",
+          content: [
+            {
+              type: "output_text",
+              text: "Hari kecil yang sederhana ini terasa hangat karena dijalani bersama. Senyum yang tertangkap membuat momen ini layak disimpan lebih lama."
+            }
+          ]
+        }
+      ]
+    }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+
+  throw new Error(`Unexpected external request: ${url}`);
 }
 
 before(async () => {
@@ -185,6 +209,49 @@ test("creates an admin session and rejects unsupported music links", async () =>
   });
   assert.equal(invalidMedia.status, 400);
   assert.match((await invalidMedia.json()).error, /belum didukung/);
+
+  const aiDescription = await fetch(`${baseUrl}/api/admin/ai/description`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: sessionCookie
+    },
+    body: JSON.stringify({
+      title: "Sore pertama kita",
+      image: {
+        originalName: "memory.png",
+        mimeType: "image/png",
+        fileData: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+      }
+    })
+  });
+  assert.equal(aiDescription.status, 200);
+  assert.deepEqual(await aiDescription.json(), {
+    description: "Hari kecil yang sederhana ini terasa hangat karena dijalani bersama. Senyum yang tertangkap membuat momen ini layak disimpan lebih lama.",
+    model: "gpt-test-vision"
+  });
+  assert.equal(lastOpenAIRequest.model, "gpt-test-vision");
+  assert.equal(lastOpenAIRequest.reasoning.effort, "medium");
+  assert.equal(lastOpenAIRequest.store, false);
+  assert.match(lastOpenAIRequest.input[0].content[0].text, /Sore pertama kita/);
+  assert.match(lastOpenAIRequest.input[0].content[1].image_url, /^data:image\/png;base64,/);
+
+  const invalidAiImage = await fetch(`${baseUrl}/api/admin/ai/description`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Cookie: sessionCookie
+    },
+    body: JSON.stringify({
+      title: "SVG memory",
+      image: {
+        mimeType: "image/svg+xml",
+        fileData: "data:image/svg+xml;base64,PHN2Zy8+"
+      }
+    })
+  });
+  assert.equal(invalidAiImage.status, 400);
+  assert.match((await invalidAiImage.json()).error, /belum didukung/);
 });
 
 test("returns 404 for missing static assets", async () => {

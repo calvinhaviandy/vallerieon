@@ -38,6 +38,8 @@ import {
   readFileAsDataUrl
 } from "../lib/media";
 
+const AI_SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 function Message({ message }) {
   if (!message?.text) return null;
   return (
@@ -409,9 +411,13 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
   const [description, setDescription] = useState("");
   const [featured, setFeatured] = useState(false);
   const [files, setFiles] = useState([]);
+  const [aiPreviewUrl, setAiPreviewUrl] = useState("");
+  const [generatingDescription, setGeneratingDescription] = useState(false);
+  const [aiMessage, setAiMessage] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(null);
   const [inputKey, setInputKey] = useState(0);
+  const aiImage = files.find((file) => AI_SUPPORTED_IMAGE_TYPES.has(file.type));
 
   useEffect(() => {
     if (editingItem) {
@@ -419,18 +425,77 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
       setDescription(editingItem.description || "");
       setFeatured(Boolean(editingItem.featured));
       setFiles([]);
+      setAiMessage(null);
       setInputKey((value) => value + 1);
       setMessage({ text: "Media lama tetap dipakai jika tidak diganti.", type: "info" });
       panelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [editingItem, panelRef]);
 
+  useEffect(() => {
+    if (!aiImage) {
+      setAiPreviewUrl("");
+      return undefined;
+    }
+
+    const objectUrl = URL.createObjectURL(aiImage);
+    setAiPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [aiImage]);
+
   function reset() {
     setTitle("");
     setDescription("");
     setFeatured(false);
     setFiles([]);
+    setAiMessage(null);
     setInputKey((value) => value + 1);
+  }
+
+  async function generateDescription() {
+    const cleanTitle = title.trim();
+    if (!cleanTitle) {
+      setAiMessage({ text: "Isi judul memori agar AI mendapat konteks ceritanya.", type: "error" });
+      return;
+    }
+    if (!aiImage) {
+      setAiMessage({ text: "Pilih foto JPEG, PNG, atau WebP untuk dibaca AI.", type: "error" });
+      return;
+    }
+
+    setGeneratingDescription(true);
+    setAiMessage({ text: "AI sedang membaca foto dan menyusun cerita...", type: "info" });
+    try {
+      const [preparedImage] = await prepareFiles([aiImage]);
+      const result = await request("/api/admin/ai/description", {
+        method: "POST",
+        body: JSON.stringify({
+          title: cleanTitle,
+          image: {
+            originalName: preparedImage.name,
+            mimeType: preparedImage.type,
+            fileData: await readFileAsDataUrl(preparedImage)
+          }
+        })
+      });
+      const generated = String(result.description || "").trim();
+      if (!generated) throw new Error("AI belum menghasilkan deskripsi. Coba lagi.");
+      setDescription(generated.slice(0, 3000));
+      setAiMessage({ text: "Draft AI sudah masuk. Baca dan ubah sesukamu sebelum upload.", type: "success" });
+      announce({
+        type: "success",
+        title: "Draft cerita siap",
+        text: "Deskripsi dari foto sudah ditambahkan dan masih bisa diedit."
+      });
+    } catch (error) {
+      if (error.status === 401) onUnauthorized();
+      else {
+        setAiMessage({ text: error.message, type: "error" });
+        announce({ type: "error", title: "AI belum berhasil", text: error.message });
+      }
+    } finally {
+      setGeneratingDescription(false);
+    }
   }
 
   async function submit(event) {
@@ -507,14 +572,9 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
           <span className="field-label">Judul memori</span>
           <input type="text" value={title} maxLength="120" onChange={(event) => setTitle(event.target.value)} placeholder="Nama momen ini" required />
         </label>
-        <label>
-          <span className="field-label">Cerita</span>
-          <textarea value={description} maxLength="3000" rows="5" onChange={(event) => setDescription(event.target.value)} placeholder="Tulis hal yang ingin selalu diingat..." />
-          <small className="character-count">{description.length}/3000</small>
-        </label>
 
         <label className="memory-dropzone" htmlFor="memory-files">
-          <input key={inputKey} id="memory-files" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,video/mp4,video/webm,video/quicktime" multiple onChange={(event) => setFiles(Array.from(event.target.files || []))} />
+          <input key={inputKey} id="memory-files" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,video/mp4,video/webm,video/quicktime" multiple onChange={(event) => { setFiles(Array.from(event.target.files || [])); setAiMessage(null); setMessage(null); }} />
           <span className="dropzone-icon"><Plus /></span>
           <span><strong>{files.length ? `${files.length} file dipilih` : editingItem ? "Ganti media" : "Tambah foto atau video"}</strong><small>Tarik file ke sini atau pilih dari perangkat</small></span>
           <CloudUpload />
@@ -527,6 +587,31 @@ function MemoryEditor({ editingItem, onCancelEdit, onSaved, onUnauthorized, noti
             ))}
           </div>
         )}
+
+        <div className="ai-description-block">
+          <div className={`ai-description-tool ${aiImage ? "has-image" : ""}`}>
+            {aiPreviewUrl ? (
+              <img className="ai-description-preview" src={aiPreviewUrl} alt="" />
+            ) : (
+              <span className="ai-description-preview ai-description-preview-empty" aria-hidden="true"><Sparkles /></span>
+            )}
+            <span className="ai-description-copy">
+              <small>AI description</small>
+              <strong>{aiImage ? aiImage.name : "Judul + foto menjadi draft cerita"}</strong>
+              <span>{aiImage ? "Foto pertama diproses OpenAI saat tombol ditekan." : "Pilih foto JPEG, PNG, atau WebP terlebih dahulu."}</span>
+            </span>
+            <button type="button" onClick={generateDescription} disabled={generatingDescription || busy} title="Buat deskripsi dari judul dan foto">
+              <BusyLabel busy={generatingDescription} busyText="Membaca"><Sparkles /><span>Buat deskripsi</span></BusyLabel>
+            </button>
+          </div>
+          <Message message={aiMessage} />
+        </div>
+
+        <label>
+          <span className="field-label">Cerita</span>
+          <textarea value={description} maxLength="3000" rows="5" onChange={(event) => setDescription(event.target.value)} placeholder="Tulis sendiri atau buat draft dari foto dengan AI..." />
+          <small className="character-count">{description.length}/3000</small>
+        </label>
 
         <label className="admin-check-row featured-check">
           <input type="checkbox" checked={featured} onChange={(event) => setFeatured(event.target.checked)} />

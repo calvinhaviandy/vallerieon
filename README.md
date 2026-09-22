@@ -19,6 +19,7 @@ Arsip kenangan pribadi berbasis React dengan carousel foto/video, soundtrack Spo
 - Spotify search di admin dan Spotify Embed di halaman utama
 - Player audio untuk file upload atau direct audio URL
 - Upload, edit, featured memory, dan hapus memori
+- Draft deskripsi AI dari judul dan foto yang dipilih di panel admin
 - Kompresi gambar di browser sebelum upload
 - Sinkronisasi langsung antara tab admin dan halaman publik
 - Admin hanya dapat dibuka melalui shortcut dan cookie entry sementara
@@ -55,6 +56,7 @@ ADMIN_PASSWORD=password-admin-kamu
 ADMIN_SESSION_SECRET=random-secret-yang-panjang
 SPOTIFY_CLIENT_ID=client-id-aplikasi-spotify
 SPOTIFY_CLIENT_SECRET=client-secret-aplikasi-spotify
+OPENAI_API_KEY=api-key-openai-kamu
 BLOB_STORE_ID=store-id-kamu
 BLOB_READ_WRITE_TOKEN=token-blob-kamu
 ```
@@ -65,6 +67,8 @@ Environment opsional:
 
 ```text
 FRONTEND_ORIGIN=https://domain-kamu.com
+OPENAI_VISION_MODEL=gpt-5.6-sol
+OPENAI_REASONING_EFFORT=medium
 BLOB_DATA_PREFIX=data
 BLOB_UPLOAD_PREFIX=uploads
 DISABLE_LOCAL_SEED=true
