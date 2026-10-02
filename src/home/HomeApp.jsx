@@ -6,6 +6,7 @@ import {
   Heart,
   Images,
   MapPin,
+  Maximize2,
   MousePointerClick,
   Play,
   RefreshCw,
@@ -16,6 +17,9 @@ import { MediaAsset } from "../components/MediaAsset";
 import { createSyncChannel, request } from "../lib/api";
 import { flattenMemories, formatDate } from "../lib/media";
 import { MusicPlayer } from "./MusicPlayer";
+import { ChapterPicker } from "./ChapterPicker";
+import { MemoryStory } from "./MemoryStory";
+import { MemoryViewer } from "./MemoryViewer";
 
 function getCircularIndex(index, length) {
   if (!length) return 0;
@@ -116,7 +120,7 @@ function MemoryThread({ items, activeIndex, select }) {
   );
 }
 
-function MemoryStage({ items, activeIndex, direction, transitionMode, moveMoment, moveChapter }) {
+function MemoryStage({ items, activeIndex, direction, transitionMode, moveMoment, moveChapter, onOpenViewer, viewerButtonRef }) {
   const active = items[activeIndex];
   const chapterStops = getThreadStops(items);
   const pointerStart = useRef(null);
@@ -209,6 +213,16 @@ function MemoryStage({ items, activeIndex, direction, transitionMode, moveMoment
               </span>
             )}
           </MainMediaTag>
+          <button
+            className="memory-open-viewer"
+            ref={viewerButtonRef}
+            type="button"
+            onClick={onOpenViewer}
+            aria-label={active.media?.type === "video" ? "Buka video penuh" : "Buka foto penuh"}
+            title="Lihat ukuran penuh"
+          >
+            <Maximize2 />
+          </button>
           <div className="carousel-index" aria-live="polite">
             <Heart fill="currentColor" />
             <span>{String(active.mediaIndex + 1).padStart(2, "0")}</span>
@@ -217,28 +231,6 @@ function MemoryStage({ items, activeIndex, direction, transitionMode, moveMoment
           </div>
         </div>
 
-        {hasMultipleChapters && (
-          <>
-            <button
-              className="carousel-arrow carousel-arrow-left"
-              type="button"
-              onClick={() => moveChapter(-1)}
-              aria-label="Chapter sebelumnya"
-              title="Chapter sebelumnya"
-            >
-              <ChevronLeft />
-            </button>
-            <button
-              className="carousel-arrow carousel-arrow-right"
-              type="button"
-              onClick={() => moveChapter(1)}
-              aria-label="Chapter berikutnya"
-              title="Chapter berikutnya"
-            >
-              <ChevronRight />
-            </button>
-          </>
-        )}
       </div>
 
       {hasMultipleChapters && (
@@ -275,6 +267,7 @@ function MemoryDots({ items, activeIndex, select }) {
             type="button"
             onClick={() => select(itemIndex)}
             aria-label={`Buka momen ${momentIndex + 1}`}
+            aria-current={itemIndex === activeIndex ? "true" : undefined}
             title={`Momen ${momentIndex + 1}`}
           >
             <Heart fill={itemIndex === activeIndex ? "currentColor" : "none"} />
@@ -287,6 +280,7 @@ function MemoryDots({ items, activeIndex, select }) {
 
 export function HomeApp() {
   const mainRef = useRef(null);
+  const viewerButtonRef = useRef(null);
   const [memories, setMemories] = useState([]);
   const [config, setConfig] = useState({});
   const [activeIndex, setActiveIndex] = useState(0);
@@ -294,6 +288,7 @@ export function HomeApp() {
   const [transitionMode, setTransitionMode] = useState("navigation");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [viewerOpen, setViewerOpen] = useState(false);
   const carouselItems = useMemo(() => flattenMemories(memories), [memories]);
   const chapterStops = useMemo(() => getThreadStops(carouselItems), [carouselItems]);
   const active = carouselItems[activeIndex];
@@ -301,6 +296,11 @@ export function HomeApp() {
     return Math.max(0, chapterStops.findIndex(({ item }) => item.entry.id === active?.entry.id));
   }, [active?.entry.id, chapterStops]);
   const threadPalette = THREAD_PALETTES[activeThreadStop % THREAD_PALETTES.length];
+
+  function closeViewer() {
+    setViewerOpen(false);
+    window.requestAnimationFrame(() => viewerButtonRef.current?.focus({ preventScroll: true }));
+  }
 
   const loadData = useCallback(async () => {
     try {
@@ -386,9 +386,6 @@ export function HomeApp() {
     return () => document.removeEventListener("keydown", handleKeyboard);
   }, [moveChapter]);
 
-  const description = active?.entry?.description?.trim() || "Memori kecil yang tetap berarti.";
-  const activeType = active?.media?.type === "video" ? "Video" : "Photo";
-
   function moveThreadWithPointer(event) {
     if (event.pointerType === "touch") return;
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -432,6 +429,15 @@ export function HomeApp() {
           <div className="home-error"><strong>Koneksi terputus</strong><span>{error}</span><button type="button" onClick={loadData}>Coba lagi</button></div>
         ) : (
           <>
+            <ChapterPicker stops={chapterStops} activeId={active?.entry.id} onSelect={selectMemory} />
+
+            {active && (
+              <div className="memory-heading">
+                <p><CalendarDays /> {formatDate(active.entry.createdAt)}{active.entry.featured && <span><Heart fill="currentColor" /> Our favorite</span>}</p>
+                <h1>{active.entry.title}</h1>
+              </div>
+            )}
+
             <MemoryStage
               items={carouselItems}
               activeIndex={activeIndex}
@@ -439,36 +445,37 @@ export function HomeApp() {
               transitionMode={transitionMode}
               moveMoment={moveMoment}
               moveChapter={moveChapter}
+              onOpenViewer={() => setViewerOpen(true)}
+              viewerButtonRef={viewerButtonRef}
             />
 
-            <div className="center-player-wrap">
-              <MusicPlayer
-                config={config}
-                activeItem={active}
-                onPrevious={() => moveChapter(-1)}
-                onNext={() => moveChapter(1)}
-                hasMultiple={chapterStops.length > 1}
-              />
-            </div>
+            {chapterStops.length > 1 && (
+              <nav className="chapter-navigation" aria-label="Pindah chapter">
+                <button type="button" onClick={() => moveChapter(-1)}><ChevronLeft /><span>Chapter sebelumnya</span></button>
+                <button type="button" onClick={() => moveChapter(1)}><span>Chapter berikutnya</span><ChevronRight /></button>
+              </nav>
+            )}
 
+            {active?.mediaCount > 0 && <p className="moment-position" aria-live="polite">{active.media?.type === "video" ? "Video" : "Foto"} {active.mediaIndex + 1} dari {active.mediaCount} dalam chapter ini</p>}
             <MemoryDots items={carouselItems} activeIndex={activeIndex} select={selectMemory} />
 
-            {active && (
-              <article className="active-story" key={active.entry.id}>
-                <div className="active-story-meta">
-                  <span>{active.entry.featured ? "Our favorite" : activeType}</span>
-                  <i />
-                  <span><CalendarDays /> {formatDate(active.entry.createdAt)}</span>
-                  {active.mediaCount > 1 && <><i /><span><Images /> moment {active.mediaIndex + 1}/{active.mediaCount}</span></>}
-                </div>
-                <h1>{active.entry.title}</h1>
-                <p>{description}</p>
-                <span className="story-signature">with love, us <Heart fill="currentColor" /></span>
-              </article>
-            )}
+            {active && <MemoryStory key={`story-${active.entry.id}`} entry={active.entry} />}
+
+            <div className="center-player-wrap">
+              <MusicPlayer config={config} activeItem={active} hasMultiple={false} />
+            </div>
           </>
         )}
       </main>
+
+      {viewerOpen && active && (
+        <MemoryViewer
+          item={active}
+          onClose={closeViewer}
+          onPrevious={() => moveMoment(-1, "navigation")}
+          onNext={() => moveMoment(1, "navigation")}
+        />
+      )}
 
       <footer className="cute-footer">
         <span><Heart fill="currentColor" /> Gallery of Us</span>

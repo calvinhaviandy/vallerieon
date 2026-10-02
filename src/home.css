@@ -612,7 +612,7 @@ svg {
   pointer-events: none;
   transform: rotate(-2deg);
   transition: opacity 160ms ease, transform 160ms ease;
-  animation: tap-cue-arrive 520ms 420ms both cubic-bezier(0.16, 1, 0.3, 1), tap-cue-nudge 3.2s 1.5s ease-in-out infinite;
+  animation: tap-cue-arrive 520ms 420ms both cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .carousel-tap-cue-icon {
@@ -1079,7 +1079,7 @@ svg {
   justify-content: center;
   gap: 0.24rem;
   max-width: min(34rem, calc(100% - 2rem));
-  margin: 1.35rem auto 0;
+  margin: 0.2rem auto 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -1090,8 +1090,8 @@ svg {
 
 .memory-dots button {
   display: grid;
-  width: 1.65rem;
-  height: 1.65rem;
+  width: 2.75rem;
+  height: 2.75rem;
   flex: 0 0 auto;
   place-items: center;
   border: 0;
@@ -1170,11 +1170,15 @@ svg {
   background: #ff6f91;
 }
 
-.active-story h1 {
-  margin: 0.6rem 0 0;
+.active-story h2 {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0;
   color: #31262a;
   font-family: var(--font-display);
-  font-size: 2.25rem;
+  font-size: 1.15rem;
   font-weight: 600;
   line-height: 1.05;
 }
@@ -1184,10 +1188,147 @@ svg {
   overflow: hidden;
   margin: 0.65rem auto 0;
   color: #7e6570;
-  font-size: 0.76rem;
-  line-height: 1.55;
+  font-size: 0.92rem;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 4;
+}
+
+.active-story > p.is-expanded {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+
+.story-read-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  margin: 0.5rem auto 0;
+  padding: 0.4rem 0.7rem;
+  border: 0;
+  border-radius: 5px;
+  background: #fff3f6;
+  color: #a72f50;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.story-read-more[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.memory-heading {
+  position: relative;
+  z-index: 2;
+  width: min(39rem, 100%);
+  margin: 1.2rem auto 1.8rem;
+  text-align: center;
+}
+
+.memory-heading > p {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0;
+  color: #89626f;
+  font-size: 0.75rem;
+}
+
+.memory-heading > p svg {
+  width: 0.85rem;
+  height: 0.85rem;
+}
+
+.memory-heading > p span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.3rem;
+  color: #b43759;
+}
+
+.memory-heading h1 {
+  margin: 0.45rem 0 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.75rem, 3vw, 2.45rem);
+  font-weight: 600;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.memory-open-viewer {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border: 1px solid #31262a;
+  border-radius: 6px;
+  background: rgba(255, 250, 252, 0.94);
+  box-shadow: 2px 2px 0 rgba(49, 38, 42, 0.6);
+  color: #31262a;
+  cursor: pointer;
+}
+
+.chapter-navigation {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.7rem;
+  width: min(27rem, calc(100% - 1rem));
+  margin: 1.65rem auto 0;
+}
+
+.chapter-navigation button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 2.75rem;
+  padding: 0.4rem;
+  border: 1px solid #e5c6cf;
+  border-radius: 6px;
+  background: #fff;
+  color: #714451;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.chapter-navigation button:hover {
+  border-color: #c5496a;
+  background: #fff0f4;
+}
+
+.chapter-navigation svg {
+  flex-shrink: 0;
+}
+
+.moment-position {
+  position: relative;
+  z-index: 2;
+  margin: 1.5rem 0 0;
+  color: #89626f;
+  font-size: 0.76rem;
+  text-align: center;
+}
+
+.chapter-navigation + .moment-position {
+  margin-top: 0.65rem;
+}
+
+.center-player-wrap {
+  margin-top: 1.75rem;
 }
 
 .story-signature {
@@ -1365,7 +1506,7 @@ svg {
 
   .center-player-wrap {
     width: calc(100% - 0.8rem);
-    margin-top: -1.1rem;
+    margin-top: 1.75rem;
   }
 
   .audio-dock,
@@ -1410,12 +1551,12 @@ svg {
     flex-wrap: wrap;
   }
 
-  .active-story h1 {
-    font-size: 1.8rem;
+  .active-story h2 {
+    font-size: 1.1rem;
   }
 
   .active-story > p {
-    font-size: 0.72rem;
+    font-size: 0.9rem;
   }
 
   .cute-footer {

@@ -120,7 +120,7 @@ function SpotifyPlayer({ track, onPrevious, onNext, hasMultiple }) {
       <div className="player-summary">
         <PlayerArtwork source={track.imageUrl} title={track.name} />
         <span className="player-track-copy min-w-0">
-          <small>Playing from Spotify</small>
+          <small>{showEmbed ? "Player Spotify" : "Soundtrack kita"}</small>
           <strong>{track.name}</strong>
           <span>{track.artist}</span>
         </span>
